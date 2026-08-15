@@ -1,0 +1,26 @@
+{
+  "inputs": {
+    "airfoil": "naca0015",
+    "root_chord_m": 0.12,
+    "tip_chord_m": 0.06,
+    "span_m": 0.09,
+    "thickness_ratio": 0.15,
+    "dynamic_pressure_pa": 1122.975,
+    "speed_mps": 1.5,
+    "nu": 1.004e-06,
+    "alpha_deg": 5.0,
+    "n_strips": 40
+  },
+  "expected": {
+    "x_cp_le_frac": 0.3002613119288485,
+    "z_cp_m": 0.040003124999999994,
+    "total_lift_n": 2.076287016866304,
+    "hinge_moment_nm": 0.009741059610951269
+  },
+  "tolerance": {
+    "x_cp_le_frac": 0.02,
+    "z_cp_rel": 0.05,
+    "lift_rel": 0.08
+  },
+  "notes": "Bootstrap panel Cp archive; regenerate if Cp datasets change."
+}

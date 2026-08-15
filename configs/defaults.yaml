@@ -1,0 +1,87 @@
+# Version 1 engineering defaults (no magic numbers in code — load from here)
+version: "0.1.0"
+
+fluids:
+  freshwater:
+    density_kg_m3: 998.2
+    dynamic_viscosity_pa_s: 1.002e-3
+    kinematic_viscosity_m2_s: 1.004e-6
+    gravity_m_s2: 9.80665
+    temperature_C: 20.0
+  seawater:
+    density_kg_m3: 1025.0
+    dynamic_viscosity_pa_s: 1.08e-3
+    kinematic_viscosity_m2_s: 1.05e-6
+    gravity_m_s2: 9.80665
+    temperature_C: 25.0
+    salinity_psu: 35.0
+
+sizing:
+  cl_initial: 0.5
+  aspect_ratio: 1.8
+  taper_ratio: 0.5
+  sweep_deg: 0.0
+  oswald_e: 0.80
+  area_convergence_tol: 0.005
+  max_airfoil_iterations: 25
+  stall_margin_deg: 5.0
+
+maneuvering:
+  control_margin: 0.25
+  emergency_load_factor: 1.5
+
+structure:
+  fos_cruise: 2.0
+  fos_aggressive: 2.5
+  fos_emergency: 3.0
+  tip_deflection_limit_span_frac: 0.05
+
+servo:
+  # Stall torque 35.5 kg·cm → 3.481 N·m (1 kg·cm = 0.0980665 N·m)
+  rated_torque_nm: 3.481
+  shaft_diameter_m: 0.012
+  max_rotation_deg: 180.0
+  efficiency: 1.0
+  # No-load: 0.192 s/60° → 312.5 °/s (≈ 52 RPM)
+  max_speed_deg_s: 312.5
+  util_continuous_limit: 0.70
+  util_peak_limit: 0.90
+
+geometry_constraints:
+  max_span_over_diameter: 0.55
+  min_tip_chord_m: 0.015
+  min_te_thickness_m: 0.0008
+  min_wall_thickness_m: 0.0012
+  # Local airfoil width at hinge (25%c) must be ≥ this × shaft OD
+  shaft_clearance_factor: 1.10
+
+airfoil_ranking_weights:
+  lift_capability: 0.35
+  profile_drag: 0.25
+  thickness: 0.15
+  pitching_moment: 0.10
+  servo_demand: 0.10
+  manufacturability: 0.05
+
+optimization:
+  algorithm: NSGA-II
+  population: 80
+  generations: 120
+  objectives: [drag, mass]
+
+hydrodynamics:
+  crossflow_cd: 1.0
+  axial_added_mass_factor: 0.1
+
+center_of_pressure:
+  provider: xfoil_file
+  n_strips: 40
+  integration_epsrel: 1.0e-6
+  verify_rel_tol_warn: 0.05
+  verify_rel_tol_fail: 0.15
+  cache_enabled: true
+  hinge_chord_fraction: 0.25
+
+tolerances:
+  engineering_relative: 0.01
+  geometry_relative: 0.001

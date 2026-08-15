@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auv-fin-design"
+version = "0.1.0"
+description = "Torpedo AUV Fin Design & Optimization Suite"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "AUV Fin Design Team" }]
+dependencies = [
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "pandas>=2.1",
+  "pydantic>=2.5",
+  "pydantic-settings>=2.1",
+  "pyyaml>=6.0",
+  "matplotlib>=3.8",
+  "PySide6>=6.6",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+  "pytest-cov>=4.1",
+  "mypy>=1.7",
+  "ruff>=0.1",
+  "jupyter>=1.0",
+  "ipywidgets>=8.1",
+]
+opt = ["pymoo>=0.6"]
+cad = ["cadquery>=2.4"]
+gui = ["PySide6>=6.6", "pyvista>=0.43"]
+
+[project.scripts]
+auv-fin = "auv_fin_design.application.cli:main"
+auv-fin-gui = "auv_fin_design.ui.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+packages = ["auv_fin_design"]
