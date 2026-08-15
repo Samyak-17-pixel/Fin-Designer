@@ -1,0 +1,4 @@
+cp_source: vortex_panel_bootstrap_v1
+name: naca0012
+note: Replace cp/ with true XFOIL dumps when available; layout unchanged.
+thickness_ratio: 0.12

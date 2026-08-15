@@ -1,0 +1,886 @@
+# AUV Fin Design Platform — Equation Register (Mathematical Constitution)
+# Status: proposed | approved | rejected | superseded
+# Every production engineering equation MUST reference an ID from this file.
+version: "0.1.0"
+fossen_edition: "2nd Edition"
+last_updated: "2026-07-29"
+notes: >
+  V1 freezes. Fins aft, X-config. Formulas marked status=proposed pending
+  engineering review before production use is considered constitutionally frozen.
+
+meta:
+  golden_vehicle:
+    length_m: 1.35
+    diameter_m: 0.1685
+    mass_kg: 24.0
+    water: freshwater
+    design_speed_mps: 1.5
+    turning_radius_m: 6.0
+    turn_establishment_s: 30.0
+    n_fins: 4
+    configuration: X
+    clocking_deg: [45, 135, 225, 315]
+    cg_fraction_of_length: 0.5
+    fin_root_axial_fraction_of_length: 0.92  # aft; from nose to root leading-edge / root station
+    lever_arm_definition: CG to quarter-chord of fin root
+  defaults:
+    cl_initial: 0.5
+    aspect_ratio: 1.8
+    taper_ratio: 0.5
+    sweep_deg: 0.0
+    oswald_e: 0.80
+    control_margin: 0.25
+    emergency_load_factor: 1.5
+    stall_margin_deg: 5.0
+    area_convergence_tol: 0.005
+    fos_cruise: 2.0
+    fos_aggressive: 2.5
+    fos_emergency: 3.0
+    tip_deflection_limit_span_frac: 0.05
+    servo_util_continuous: 0.70
+    servo_util_peak: 0.90
+    max_span_over_diameter: 0.55
+    min_tip_chord_m: 0.015
+    min_te_thickness_m: 0.0008
+    min_wall_thickness_m: 0.0012
+    servo_torque_nm: 3.481
+    shaft_diameter_m: 0.006
+    max_servo_rotation_deg: 180.0
+
+equations:
+
+  # ── Fluid properties ──────────────────────────────────────────────
+  - id: EQ-FLUID-001
+    title: Freshwater properties (20 C)
+    equation: "rho=998.2; mu=1.002e-3; nu=1.004e-6; g=9.80665"
+    variables: {}
+    units: {rho: "kg/m^3", mu: "Pa·s", nu: "m^2/s", g: "m/s^2"}
+    reference: "IAPWS / standard engineering tables at 20 C"
+    validity: "V1 fixed; no temperature lookup"
+    implementation_module: domain.constants.fluids
+    verification_notebook: verify_vehicle_model.ipynb
+    tests: [test_EQ_FLUID_001]
+    status: approved
+
+  - id: EQ-FLUID-002
+    title: Seawater properties (20 C, 35 PSU)
+    equation: "rho=1025.0; mu=1.08e-3; nu=1.05e-6; g=9.80665"
+    variables: {}
+    units: {rho: "kg/m^3", mu: "Pa·s", nu: "m^2/s", g: "m/s^2"}
+    reference: "UNESCO / standard oceanographic tables (approximate V1 freeze)"
+    validity: "V1 fixed; 20 C, 35 PSU"
+    implementation_module: domain.constants.fluids
+    verification_notebook: verify_vehicle_model.ipynb
+    tests: [test_EQ_FLUID_002]
+    status: approved
+
+  # ── Vehicle geometry ──────────────────────────────────────────────
+  - id: EQ-VEH-001
+    title: Hull radius
+    equation: "R = D / 2"
+    variables: {D: "Hull diameter [m]", R: "Hull radius [m]"}
+    units: {R: "m"}
+    reference: "Geometry definition"
+    validity: "Circular cross-section"
+    implementation_module: domain.vehicle.model
+    verification_notebook: verify_vehicle_model.ipynb
+    tests: [test_EQ_VEH_001]
+    status: approved
+
+  - id: EQ-VEH-002
+    title: Hull cross-sectional / frontal area
+    equation: "A = Af = pi * R**2"
+    variables: {R: "Radius [m]", A: "Area [m^2]"}
+    units: {A: "m^2"}
+    reference: "Geometry definition"
+    validity: "Circular cross-section"
+    implementation_module: domain.vehicle.model
+    verification_notebook: verify_vehicle_model.ipynb
+    tests: [test_EQ_VEH_002]
+    status: approved
+
+  - id: EQ-VEH-003
+    title: Hull wetted area (cylinder only)
+    equation: "Sw = pi * D * L"
+    variables: {D: "Diameter [m]", L: "Length [m]", Sw: "Wetted area [m^2]"}
+    units: {Sw: "m^2"}
+    reference: "Hoerner, Fluid Dynamic Drag (cylinder approximation); SRDS V1"
+    validity: "Ignores nose/tail ends; document limitation. Prefer L/D > 5"
+    implementation_module: domain.vehicle.model
+    verification_notebook: verify_vehicle_model.ipynb
+    tests: [test_EQ_VEH_003]
+    status: approved
+
+  - id: EQ-VEH-004
+    title: Hull volume (displaced)
+    equation: "V = pi * R**2 * L"
+    variables: {R: "Radius [m]", L: "Length [m]", V: "Volume [m^3]"}
+    units: {V: "m^3"}
+    reference: "Uniform circular cylinder"
+    validity: "V1 uniform cylinder hull"
+    implementation_module: domain.vehicle.model
+    verification_notebook: verify_vehicle_model.ipynb
+    tests: [test_EQ_VEH_004]
+    status: approved
+
+  - id: EQ-VEH-005
+    title: Solid-cylinder inertia tensor about CG
+    equation: "Ix=0.5*m*R**2; Iy=Iz=(1/12)*m*(3*R**2 + L**2); Ixy=Ixz=Iyz=0"
+    variables: {m: "Mass [kg]", R: "Radius [m]", L: "Length [m]"}
+    units: {Ix: "kg·m^2", Iy: "kg·m^2", Iz: "kg·m^2"}
+    reference: "Classical rigid-body mechanics (solid circular cylinder)"
+    validity: "Intentional V1 simplification; user override allowed"
+    implementation_module: domain.vehicle.model
+    verification_notebook: verify_vehicle_model.ipynb
+    tests: [test_EQ_VEH_005]
+    status: approved
+
+  - id: EQ-VEH-006
+    title: Default CG and CB locations
+    equation: "x_CG = x_CB = L/2 (from nose); y=z=0"
+    variables: {L: "Length [m]"}
+    units: {x_CG: "m", x_CB: "m"}
+    reference: "SRDS V1 freeze"
+    validity: "No hydrostatic stability in V1"
+    implementation_module: domain.vehicle.model
+    verification_notebook: verify_vehicle_model.ipynb
+    tests: [test_EQ_VEH_006]
+    status: approved
+
+  # ── Hydrodynamics ─────────────────────────────────────────────────
+  - id: EQ-HYD-001
+    title: Hull length Reynolds number
+    equation: "Re_L = V * L / nu"
+    variables: {V: "Speed [m/s]", L: "Length [m]", nu: "Kinematic viscosity [m^2/s]"}
+    units: {Re_L: "1"}
+    reference: "Fossen 2nd Ed.; standard definition"
+    validity: "Incompressible; constant properties"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_001]
+    status: approved
+
+  - id: EQ-HYD-002
+    title: Hull diameter Reynolds number
+    equation: "Re_D = V * D / nu"
+    variables: {V: "Speed [m/s]", D: "Diameter [m]", nu: "Kinematic viscosity [m^2/s]"}
+    units: {Re_D: "1"}
+    reference: "Standard; used for drag correlations"
+    validity: "Incompressible"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_002]
+    status: approved
+
+  - id: EQ-HYD-003
+    title: Flow regime classification (hull length Re)
+    equation: "laminar if Re_L<5e5; transitional if 5e5<=Re_L<=3e6; else turbulent"
+    variables: {Re_L: "Length Reynolds number"}
+    units: {}
+    reference: "SRDS V1 freeze (engineering thresholds)"
+    validity: "Hull-length based; preliminary design"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_003]
+    status: approved
+
+  - id: EQ-HYD-004
+    title: Dynamic pressure
+    equation: "q = 0.5 * rho * V**2"
+    variables: {rho: "Density [kg/m^3]", V: "Speed [m/s]"}
+    units: {q: "Pa"}
+    reference: "Fossen 2nd Ed.; fluid mechanics"
+    validity: "Incompressible"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_004]
+    status: approved
+
+  - id: EQ-HYD-005
+    title: ITTC-1957 skin friction coefficient
+    equation: "Cf = 0.075 / (log10(Re_L) - 2)**2"
+    variables: {Re_L: "Length Reynolds number", Cf: "Skin friction coefficient"}
+    units: {Cf: "1"}
+    reference: "ITTC Recommended Procedures (1957 friction line)"
+    validity: "Re_L > ~1e6 preferred; usable with care in transition"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_005]
+    status: proposed
+
+  - id: EQ-HYD-006
+    title: Skin friction drag
+    equation: "Df = q * Cf * Sw"
+    variables: {q: "Dynamic pressure [Pa]", Cf: "Friction coeff", Sw: "Wetted area [m^2]"}
+    units: {Df: "N"}
+    reference: "ITTC / Hoerner decomposition"
+    validity: "Cylinder wetted area V1"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_006]
+    status: proposed
+
+  - id: EQ-HYD-007
+    title: Hull form (pressure) drag coefficient
+    equation: "Cd_form = 0.44 * (D/L) + 0.016 * (L/D) * Cf  [Hoerner slender-body style composite; see notes]"
+    variables: {D: "Diameter [m]", L: "Length [m]", Cf: "Skin friction"}
+    units: {Cd_form: "1"}
+    reference: "Hoerner, Fluid Dynamic Drag — streamlined body form-factor family (V1 adaptation)"
+    validity: "Torpedo-like; L/D typically 5–12; NOT a substitute for CFD"
+    notes: >
+      V1 uses a Hoerner-inspired slender body form factor applied to frontal area:
+      Cd_Af = Cf * (Sw/Af) * (1 + 1.5*(D/L)**1.5 + 7*(D/L)**3)  [Hoerner streamlined body]
+      Pressure/form portion taken as total - friction where needed for reporting.
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_007]
+    status: proposed
+
+  - id: EQ-HYD-008
+    title: Hoerner streamlined-body total axial drag coefficient (on frontal area)
+    equation: "Cd_Af = Cf*(Sw/Af)*(1 + 1.5*(D/L)**1.5 + 7*(D/L)**3)"
+    variables: {Cf: "ITTC Cf", Sw: "Wetted area", Af: "Frontal area", D: "Diameter", L: "Length"}
+    units: {Cd_Af: "1"}
+    reference: "Hoerner, Fluid Dynamic Drag, streamlined bodies"
+    validity: "Fully submerged; no free surface; low Mach"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_008]
+    status: proposed
+
+  - id: EQ-HYD-009
+    title: Total hull axial drag
+    equation: "Dh = q * Cd_Af * Af"
+    variables: {q: "Pa", Cd_Af: "1", Af: "m^2"}
+    units: {Dh: "N"}
+    reference: "Hoerner"
+    validity: "V1 hull only; fin drag separate"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_009]
+    status: proposed
+
+  - id: EQ-HYD-010
+    title: Lateral added mass (slender cylinder strip theory)
+    equation: "Y_vdot = Z_wdot = rho * pi * R**2 * L"
+    variables: {rho: "kg/m^3", R: "m", L: "m"}
+    units: {Y_vdot: "kg"}
+    reference: "Fossen 2nd Ed., slender-body / strip theory; Newman Marine Hydrodynamics"
+    validity: "Slender circular cylinder; neglects end effects"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_010]
+    status: proposed
+
+  - id: EQ-HYD-011
+    title: Surge added mass (slender body small axial coefficient)
+    equation: "X_udot = 0.1 * rho * V_disp   # V_disp = hull volume"
+    variables: {rho: "kg/m^3", V_disp: "m^3"}
+    units: {X_udot: "kg"}
+    reference: "Fossen 2nd Ed. (typical slender AUV axial added-mass order); Lamb spheroid k1 ~ O(0.1) for high fineness"
+    validity: "Order-of-magnitude V1; replace with spheroid Lamb factors in future"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_011]
+    status: proposed
+
+  - id: EQ-HYD-012
+    title: Yaw/pitch added inertia (slender cylinder about midship CG)
+    equation: "N_rdot = M_qdot = rho * pi * R**2 * L**3 / 12"
+    variables: {rho: "kg/m^3", R: "m", L: "m"}
+    units: {N_rdot: "kg·m^2"}
+    reference: "Fossen 2nd Ed. slender-body strip integration for uniform cylinder about mid-length CG"
+    validity: "CG at mid-length; circular section; slender"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_012]
+    status: proposed
+
+  - id: EQ-HYD-013
+    title: Roll added inertia (negligible fluid for slender cylinder V1)
+    equation: "K_pdot = 0.0"
+    variables: {}
+    units: {K_pdot: "kg·m^2"}
+    reference: "Fossen: circular section potential roll added inertia ~0"
+    validity: "Smooth circular hull; no bilge keels"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_013]
+    status: proposed
+
+  - id: EQ-HYD-014
+    title: Cross-flow drag coefficient (circular cylinder)
+    equation: "Cd_cross = 1.0"
+    variables: {}
+    units: {Cd_cross: "1"}
+    reference: "Hoerner, Fluid Dynamic Drag — circular cylinder cross-flow Cd ~ 1.0 (subcritical)"
+    validity: "Subcritical Re_D; smooth cylinder"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_014]
+    status: proposed
+
+  - id: EQ-HYD-015
+    title: Quadratic yaw damping (cross-flow integration, midship CG)
+    equation: "N_r_abs_r = -(1/32) * rho * Cd_cross * D * L**4"
+    variables: {rho: "kg/m^3", Cd_cross: "1", D: "m", L: "m"}
+    units: {N_r_abs_r: "kg·m^2"}
+    reference: "Hoerner cross-flow drag; Fossen-style strip integration for cylinder yaw"
+    validity: "Uniform cylinder; CG mid-length; planar yaw; |r| formulation M = N_|r|r * |r| * r"
+    notes: "Moment = N_r_abs_r * abs(r) * r"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_015]
+    status: proposed
+
+  - id: EQ-HYD-016
+    title: Linear yaw damping via operating-point linearization
+    equation: "N_r = 2 * N_r_abs_r * abs(r_op)"
+    variables: {N_r_abs_r: "Quadratic coeff", r_op: "Operating yaw rate [rad/s]"}
+    units: {N_r: "kg·m^2/s"}
+    reference: "Standard linearization of quadratic drag; Fossen damping decomposition"
+    validity: "Local to r_op = V_design / R_turn for design case; no tank-test IDs"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_016]
+    status: proposed
+
+  - id: EQ-HYD-017
+    title: Wake fraction V1
+    equation: "w = 0"
+    variables: {}
+    units: {}
+    reference: "SRDS V1"
+    validity: "Uniform inflow; no propeller"
+    implementation_module: domain.hydrodynamics.estimator
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_017]
+    status: approved
+
+  # ── Maneuvering / control authority ───────────────────────────────
+  - id: EQ-MAN-001
+    title: Target yaw rate (steady circular path)
+    equation: "r_target = V_c / R_t"
+    variables: {V_c: "Design speed [m/s]", R_t: "Turning radius [m]"}
+    units: {r_target: "rad/s"}
+    reference: "Fossen 2nd Ed.; planar kinematics"
+    validity: "Constant forward speed; zero sideslip V1"
+    implementation_module: domain.control.maneuvering
+    verification_notebook: verify_control_allocation.ipynb
+    tests: [test_EQ_MAN_001]
+    status: approved
+
+  - id: EQ-MAN-002
+    title: Yaw acceleration (linear ramp to target)
+    equation: "r_dot = r_target / T_turn"
+    variables: {r_target: "rad/s", T_turn: "s"}
+    units: {r_dot: "rad/s^2"}
+    reference: "SRDS V1 linear ramp assumption"
+    validity: "Establish-turn model only"
+    implementation_module: domain.control.maneuvering
+    verification_notebook: verify_control_allocation.ipynb
+    tests: [test_EQ_MAN_002]
+    status: approved
+
+  - id: EQ-MAN-003
+    title: Inertial yaw moment
+    equation: "M_I = Iz * r_dot"
+    variables: {Iz: "kg·m^2", r_dot: "rad/s^2"}
+    units: {M_I: "N·m"}
+    reference: "Newton-Euler; Fossen"
+    validity: "Rigid body"
+    implementation_module: domain.control.maneuvering
+    verification_notebook: verify_control_allocation.ipynb
+    tests: [test_EQ_MAN_003]
+    status: approved
+
+  - id: EQ-MAN-004
+    title: Added-mass yaw moment
+    equation: "M_A = N_rdot * r_dot"
+    variables: {N_rdot: "kg·m^2", r_dot: "rad/s^2"}
+    units: {M_A: "N·m"}
+    reference: "Fossen 2nd Ed."
+    validity: "Uses EQ-HYD-012"
+    implementation_module: domain.control.maneuvering
+    verification_notebook: verify_control_allocation.ipynb
+    tests: [test_EQ_MAN_004]
+    status: approved
+
+  - id: EQ-MAN-005
+    title: Hydrodynamic yaw damping moment
+    equation: "M_D = N_r * r + N_r_abs_r * abs(r) * r"
+    variables: {N_r: "linear", N_r_abs_r: "quadratic", r: "yaw rate"}
+    units: {M_D: "N·m"}
+    reference: "Fossen damping model"
+    validity: "Planar yaw"
+    implementation_module: domain.control.maneuvering
+    verification_notebook: verify_control_allocation.ipynb
+    tests: [test_EQ_MAN_005]
+    status: approved
+
+  - id: EQ-MAN-006
+    title: Required control moment (raw)
+    equation: "M_req = M_I + M_A + M_D"
+    variables: {}
+    units: {M_req: "N·m"}
+    reference: "SRDS / Fossen moment balance"
+    validity: "Ignore Munk, sideslip, currents V1"
+    implementation_module: domain.control.maneuvering
+    verification_notebook: verify_control_allocation.ipynb
+    tests: [test_EQ_MAN_006]
+    status: approved
+
+  - id: EQ-MAN-007
+    title: Design control moment with margin
+    equation: "M_design = max(|M_transient|, |M_steady|) * (1 + margin)"
+    variables: {margin: "default 0.25"}
+    units: {M_design: "N·m"}
+    reference: "SRDS V1 freeze"
+    validity: "Margin applied BEFORE allocation"
+    notes: "M_transient uses r=r_target/2 mid-ramp approx or r_target with r_dot; V1 evaluates transient at r=r_target with r_dot, and steady at r=r_target with r_dot=0"
+    implementation_module: domain.control.maneuvering
+    verification_notebook: verify_control_allocation.ipynb
+    tests: [test_EQ_MAN_007]
+    status: approved
+
+  # ── Control allocation ────────────────────────────────────────────
+  - id: EQ-ALLOC-001
+    title: X-fin mounting angles
+    equation: "theta_i in {45, 135, 225, 315} deg from vertical (+z down body)"
+    variables: {}
+    units: {theta: "deg"}
+    reference: "SRDS / user freeze; aft X-tail"
+    validity: "4 fins; identical"
+    implementation_module: domain.control.allocation
+    verification_notebook: verify_control_allocation.ipynb
+    tests: [test_EQ_ALLOC_001]
+    status: approved
+
+  - id: EQ-ALLOC-002
+    title: Lever arm (CG to root quarter-chord)
+    equation: "ell = abs(x_root_qc - x_CG)"
+    variables: {x_root_qc: "Root quarter-chord axial pos from nose [m]"}
+    units: {ell: "m"}
+    reference: "User freeze"
+    validity: "Force at 25% MAC; lever uses root QC axial station for V1"
+    implementation_module: domain.control.allocation
+    verification_notebook: verify_control_allocation.ipynb
+    tests: [test_EQ_ALLOC_002]
+    status: approved
+
+  - id: EQ-ALLOC-003
+    title: Root quarter-chord axial position
+    equation: "x_root_qc = x_root_le + 0.25 * c_root"
+    variables: {x_root_le: "Root leading edge from nose [m]", c_root: "Root chord [m]"}
+    units: {x_root_qc: "m"}
+    reference: "Standard aero quarter-chord"
+    validity: "Zero sweep V1 default"
+    implementation_module: domain.control.allocation
+    verification_notebook: verify_control_allocation.ipynb
+    tests: [test_EQ_ALLOC_003]
+    status: approved
+
+  - id: EQ-ALLOC-004
+    title: Yaw moment from fin lift (X-config symmetric)
+    equation: "M_yaw = sum_i (L_i * ell * cos(phi_i_yaw_proj)); V1: L_req_each = M_design / (4 * ell * sin(45*pi/180))"
+    variables: {M_design: "N·m", ell: "m", L_req_each: "N"}
+    units: {L_req_each: "N"}
+    reference: "Fossen control allocation; geometric projection for ±45° X-tail"
+    validity: "Yaw-only; symmetric loading; identical fins; force direction normal to fin"
+    notes: >
+      For X-tail at 45°, each fin's lift has a yaw-producing component.
+      With four fins and equal |L|, effective yaw arm factor is sin(45°)=1/sqrt(2)
+      per fin: M = 4 * L * ell * (1/sqrt(2)) => L = M / (4 * ell / sqrt(2)) = M * sqrt(2) / (4*ell)
+    implementation_module: domain.control.allocation
+    verification_notebook: verify_control_allocation.ipynb
+    tests: [test_EQ_ALLOC_004]
+    status: proposed
+
+  # ── Fin geometry / sizing ─────────────────────────────────────────
+  - id: EQ-GEO-001
+    title: Lift equation (solve area)
+    equation: "S = L_req / (q * CL)"
+    variables: {L_req: "N", q: "Pa", CL: "1", S: "m^2"}
+    units: {S: "m^2"}
+    reference: "Abbott & von Doenhoff; standard aero"
+    validity: "One fin planform area"
+    implementation_module: domain.geometry.sizing
+    verification_notebook: verify_fin_sizing.ipynb
+    tests: [test_EQ_GEO_001]
+    status: approved
+
+  - id: EQ-GEO-002
+    title: Span from area and AR
+    equation: "b = sqrt(S * AR)"
+    variables: {S: "m^2", AR: "1", b: "m"}
+    units: {b: "m"}
+    reference: "Standard planform definition AR=b^2/S"
+    validity: "Trapezoidal planform"
+    implementation_module: domain.geometry.sizing
+    verification_notebook: verify_fin_sizing.ipynb
+    tests: [test_EQ_GEO_002]
+    status: approved
+
+  - id: EQ-GEO-003
+    title: Trapezoidal root and tip chords
+    equation: "c_r = 2*S / (b*(1+lam)); c_t = lam * c_r"
+    variables: {lam: "taper ratio tip/root", S: "m^2", b: "m"}
+    units: {c_r: "m", c_t: "m"}
+    reference: "Standard trapezoidal wing geometry"
+    validity: "Straight taper; zero sweep reference"
+    implementation_module: domain.geometry.sizing
+    verification_notebook: verify_fin_sizing.ipynb
+    tests: [test_EQ_GEO_003]
+    status: approved
+
+  - id: EQ-GEO-004
+    title: Mean aerodynamic chord (trapezoid)
+    equation: "MAC = (2/3)*c_r*(1+lam+lam**2)/(1+lam)"
+    variables: {c_r: "m", lam: "1"}
+    units: {MAC: "m"}
+    reference: "Abbott & von Doenhoff / standard aero"
+    validity: "Straight tapered wing"
+    implementation_module: domain.geometry.sizing
+    verification_notebook: verify_fin_sizing.ipynb
+    tests: [test_EQ_GEO_004]
+    status: approved
+
+  - id: EQ-GEO-005
+    title: Fin Reynolds number on MAC
+    equation: "Re_mac = V * MAC / nu"
+    variables: {V: "m/s", MAC: "m", nu: "m^2/s"}
+    units: {Re_mac: "1"}
+    reference: "Standard"
+    validity: "Matched-Re polar lookup"
+    implementation_module: domain.airfoil.performance
+    verification_notebook: verify_airfoil_selection.ipynb
+    tests: [test_EQ_GEO_005]
+    status: approved
+
+  - id: EQ-GEO-006
+    title: Packaging max span
+    equation: "b <= 0.45 * D"
+    variables: {D: "Hull diameter [m]"}
+    units: {b: "m"}
+    reference: "User V1 freeze (FDM packaging)"
+    validity: "Override allowed in config"
+    implementation_module: domain.geometry.sizing
+    verification_notebook: verify_fin_sizing.ipynb
+    tests: [test_EQ_GEO_006]
+    status: approved
+
+  - id: EQ-GEO-007
+    title: Shaft fit at hinge (25% chord)
+    equation: "t_local(0.25) = 2*yt(0.25)*c_root;  t_local >= k * d_shaft   # default k=1.10"
+    variables: {yt: "NACA half-thickness/c", c_root: "m", d_shaft: "m", k: "clearance factor"}
+    units: {t_local: "m"}
+    reference: "Abbott NACA thickness; user: width a little more than shaft OD"
+    validity: "Hinge fixed at 25%c; NACA 4-digit; clearance_factor from config"
+    implementation_module: domain.geometry.shaft_fit
+    verification_notebook: verify_fin_sizing.ipynb
+    tests: [test_EQ_GEO_007]
+    status: approved
+
+  # ── Finite wing / airfoil ─────────────────────────────────────────
+  - id: EQ-AERO-001
+    title: Helmbold finite-wing lift-curve slope
+    equation: "CL_alpha_3D = cl_alpha / (sqrt(1 + (cl_alpha/(pi*AR))**2) + cl_alpha/(pi*AR))"
+    variables: {cl_alpha: "2D lift slope [1/rad]", AR: "aspect ratio", CL_alpha_3D: "1/rad"}
+    units: {CL_alpha_3D: "1/rad"}
+    reference: "Helmbold (1942); Anderson / low-AR wing theory; Selig et al. form"
+    validity: "Unswept; incompressible; AR ~ 1–6; better than Prandtl at low AR"
+    implementation_module: domain.airfoil.finite_wing
+    verification_notebook: verify_airfoil_selection.ipynb
+    tests: [test_EQ_AERO_001]
+    status: proposed
+
+  - id: EQ-AERO-002
+    title: 3D lift from corrected slope
+    equation: "CL = CL_alpha_3D * alpha   # alpha in radians; alpha = delta V1"
+    variables: {alpha: "rad"}
+    units: {CL: "1"}
+    reference: "Linear aero; user freeze alpha=delta"
+    validity: "Until stall cap; small-to-moderate alpha"
+    implementation_module: domain.airfoil.finite_wing
+    verification_notebook: verify_airfoil_selection.ipynb
+    tests: [test_EQ_AERO_002]
+    status: approved
+
+  - id: EQ-AERO-003
+    title: Stall cap (V1)
+    equation: "CL = min(CL, CL_max_2D)  # CL_max_2D = first local max of smoothed polar Cl"
+    variables: {}
+    units: {}
+    reference: "User freeze; Abbott stall concepts; polar-derived"
+    validity: "Conservative; no low-AR CL_max reduction yet"
+    implementation_module: domain.airfoil.finite_wing
+    verification_notebook: verify_airfoil_selection.ipynb
+    tests: [test_EQ_AERO_003]
+    status: approved
+
+  - id: EQ-AERO-004
+    title: Induced drag
+    equation: "CDi = CL**2 / (pi * e * AR)"
+    variables: {e: "Oswald efficiency default 0.80", AR: "1", CL: "1"}
+    units: {CDi: "1"}
+    reference: "Prandtl induced-drag; Abbott; standard"
+    validity: "With Helmbold lift; e=0.80 V1"
+    implementation_module: domain.airfoil.finite_wing
+    verification_notebook: verify_airfoil_selection.ipynb
+    tests: [test_EQ_AERO_004]
+    status: approved
+
+  - id: EQ-AERO-005
+    title: Total 3D drag coefficient
+    equation: "CD = Cd_profile(alpha_or_CL) + CDi"
+    variables: {Cd_profile: "from XFOIL polar at operating alpha"}
+    units: {CD: "1"}
+    reference: "Abbott; XFOIL profile + induced"
+    validity: "Matched Re; log-Re interpolation of polars"
+    implementation_module: domain.airfoil.finite_wing
+    verification_notebook: verify_airfoil_selection.ipynb
+    tests: [test_EQ_AERO_005]
+    status: approved
+
+  - id: EQ-AERO-006
+    title: Log-Reynolds polar interpolation
+    equation: "f(Re) = lerp(f(Re1), f(Re2), (log(Re)-log(Re1))/(log(Re2)-log(Re1)))"
+    variables: {}
+    units: {}
+    reference: "User freeze; standard aero practice"
+    validity: "Re within / slightly outside database range → clamp+warn"
+    implementation_module: domain.airfoil.database
+    verification_notebook: verify_airfoil_selection.ipynb
+    tests: [test_EQ_AERO_006]
+    status: approved
+
+  - id: EQ-AERO-007
+    title: Hinge / pitching moment coefficient usage
+    equation: "H = q * S * MAC * Cm   # Cm from XFOIL about quarter-chord"
+    variables: {Cm: "from polar"}
+    units: {H: "N·m"}
+    reference: "Abbott & von Doenhoff; XFOIL Cm convention"
+    validity: "Shaft at 25% MAC V1 → hinge moment ≈ q S c Cm"
+    implementation_module: domain.servo.analysis
+    verification_notebook: verify_servo_analysis.ipynb
+    tests: [test_EQ_AERO_007]
+    status: approved
+
+  - id: EQ-AERO-008
+    title: Center of pressure from Cm about quarter-chord (legacy estimate)
+    equation: "x_cp/c|_LE→TE = 0.25 - Cm/CL;  x_cp_hinge = (Cm/CL)*MAC;  z_cp = b*(2*c_t+c_r)/(3*(c_r+c_t))"
+    variables: {Cm: "polar about c/4", CL: "3D lift coeff", MAC: "m", b: "span m"}
+    units: {x_cp: "m", z_cp: "m"}
+    reference: "Abbott & von Doenhoff; standard aero CP from pitching moment"
+    validity: "Verification cross-check; primary CoP from EQ-COP-* strip integration"
+    implementation_module: domain.airfoil.center_of_pressure
+    verification_notebook: verify_center_of_pressure.ipynb
+    tests: [test_EQ_AERO_008]
+    status: approved
+
+  - id: EQ-COP-001
+    title: Chordwise normal-force coefficient from ΔCp
+    equation: "cn = integral_0^1 DeltaCp d(x/c)"
+    variables: {DeltaCp: "Cp_lower - Cp_upper"}
+    units: {cn: "1"}
+    reference: "Abbott & von Doenhoff; Anderson Fundamentals of Aerodynamics"
+    validity: "Lift-only CoP; SciPy simpson on archived Cp"
+    implementation_module: domain.center_of_pressure.pressure_integrator
+    verification_notebook: verify_center_of_pressure.ipynb
+    tests: [test_chordwise_integration_flat_plate_like]
+    status: approved
+
+  - id: EQ-COP-002
+    title: Chordwise center of pressure from ΔCp
+    equation: "x_cp/c = integral_0^1 (x/c)*DeltaCp d(x/c) / cn"
+    variables: {cn: "from EQ-COP-001"}
+    units: {x_cp_c: "1"}
+    reference: "Standard first-moment definition of CP"
+    validity: "Undefined at cn≈0 → fall back to 0.25"
+    implementation_module: domain.center_of_pressure.pressure_integrator
+    verification_notebook: verify_center_of_pressure.ipynb
+    tests: [test_chordwise_integration_flat_plate_like]
+    status: approved
+
+  - id: EQ-COP-003
+    title: Strip lift from local cn
+    equation: "dL = q * c(z) * cn(z) * dz"
+    variables: {q: "Pa", c: "local chord m", cn: "1", dz: "m"}
+    units: {dL: "N"}
+    reference: "Strip theory; Katz & Plotkin / standard fin design"
+    validity: "Uniform alpha along span V1; no twist"
+    implementation_module: domain.center_of_pressure.strip_theory
+    verification_notebook: verify_center_of_pressure.ipynb
+    tests: [test_rectangular_fin_cop, test_tapered_fin_cop]
+    status: approved
+
+  - id: EQ-COP-004
+    title: Spanwise center of pressure
+    equation: "z_cp = integral z dL / L"
+    variables: {L: "total lift N"}
+    units: {z_cp: "m"}
+    reference: "First moment of strip lift"
+    validity: "Lift-only"
+    implementation_module: domain.center_of_pressure.cp_solver
+    verification_notebook: verify_center_of_pressure.ipynb
+    tests: [test_rectangular_fin_cop]
+    status: approved
+
+  - id: EQ-COP-005
+    title: Hinge moment from strip loads about fixed 25%c axis
+    equation: "H = sum_i L_i * (-x_cp_hinge,i)"
+    variables: {x_cp_hinge: "hinge-frame chordwise arm m"}
+    units: {H: "N·m"}
+    reference: "Moment about mechanical hinge; shaft fixed at 25%c"
+    validity: "Replaces sole reliance on q S c Cm for servo sizing"
+    implementation_module: domain.center_of_pressure.cp_solver
+    verification_notebook: verify_center_of_pressure.ipynb
+    tests: [test_tapered_fin_cop]
+    status: approved
+
+  - id: EQ-COP-006
+    title: CoP verification vs QC and Cm/CL
+    equation: "rel_err = |x_int - x_ref| / |x_ref|; status PASS/WARNING/FAIL"
+    variables: {}
+    units: {}
+    reference: "Engineering cross-check policy"
+    validity: "Primary self-consistent Cm/CL from integrals; QC reference"
+    implementation_module: domain.center_of_pressure.cp_solver
+    verification_notebook: verify_center_of_pressure.ipynb
+    tests: [test_rectangular_fin_cop]
+    status: approved
+
+  - id: EQ-COP-007
+    title: Required fin deflection for maneuver
+    equation: "delta_req = CL_req / CL_alpha_3D; CL_req=L/(qS); alpha=delta V1"
+    variables: {CL_alpha_3D: "Helmbold 1/rad"}
+    units: {delta: "deg"}
+    reference: "User freeze alpha=delta; Helmbold EQ-AERO-001"
+    validity: "Per-fin; compare to stall−margin"
+    implementation_module: domain.center_of_pressure.cp_solver
+    verification_notebook: verify_center_of_pressure.ipynb
+    tests: [test_tapered_fin_cop]
+    status: approved
+
+  # ── Structures ────────────────────────────────────────────────────
+  - id: EQ-STR-001
+    title: PLA isotropic properties
+    equation: "rho=1240; E=3.2e9; nu=0.36; sigma_y=60e6; sigma_ult=65e6; G=1.18e9"
+    variables: {}
+    units: {E: "Pa", G: "Pa", sigma_y: "Pa"}
+    reference: "User V1 freeze (typical PLA); G consistent with E/(2(1+nu))"
+    validity: "Isotropic assumption; ignores FDM anisotropy"
+    implementation_module: domain.constants.materials
+    verification_notebook: verify_structural_analysis.ipynb
+    tests: [test_EQ_STR_001]
+    status: approved
+
+  - id: EQ-STR-002
+    title: Uniform spanwise lift distribution root shear
+    equation: "V_root = L_total"
+    variables: {L_total: "Fin lift [N]"}
+    units: {V_root: "N"}
+    reference: "Cantilever beam; uniform load"
+    validity: "V1 uniform; elliptical later"
+    implementation_module: domain.structural.beam
+    verification_notebook: verify_structural_analysis.ipynb
+    tests: [test_EQ_STR_002]
+    status: approved
+
+  - id: EQ-STR-003
+    title: Root bending moment (uniform load)
+    equation: "M_root = L_total * b / 2"
+    variables: {b: "span [m]"}
+    units: {M_root: "N·m"}
+    reference: "Cantilever with uniform distributed load resultant at midspan"
+    validity: "Load through mid-span; root fixed"
+    implementation_module: domain.structural.beam
+    verification_notebook: verify_structural_analysis.ipynb
+    tests: [test_EQ_STR_003]
+    status: approved
+
+  - id: EQ-STR-004
+    title: Solid airfoil section second moment (ellipse approx)
+    equation: "Ixx = (pi/4) * (c/2) * (t/2)**3 = pi * c * t**3 / 64"
+    variables: {c: "local chord [m]", t: "local thickness [m] = (t/c)*c"}
+    units: {Ixx: "m^4"}
+    reference: "Solid elliptical section approximation to airfoil"
+    validity: "Preliminary; not FEA"
+    implementation_module: domain.structural.beam
+    verification_notebook: verify_structural_analysis.ipynb
+    tests: [test_EQ_STR_004]
+    status: proposed
+
+  - id: EQ-STR-005
+    title: Bending stress
+    equation: "sigma = M_root * (t_root/2) / I_root"
+    variables: {}
+    units: {sigma: "Pa"}
+    reference: "Euler-Bernoulli beam theory"
+    validity: "Linear elastic"
+    implementation_module: domain.structural.beam
+    verification_notebook: verify_structural_analysis.ipynb
+    tests: [test_EQ_STR_005]
+    status: approved
+
+  - id: EQ-STR-006
+    title: Tip deflection (uniform load cantilever)
+    equation: "delta = w * b**4 / (8 * E * I)  with w = L_total/b"
+    variables: {}
+    units: {delta: "m"}
+    reference: "Standard beam tables"
+    validity: "Constant EI = E*I_root (conservative/simplified V1)"
+    implementation_module: domain.structural.beam
+    verification_notebook: verify_structural_analysis.ipynb
+    tests: [test_EQ_STR_006]
+    status: proposed
+
+  - id: EQ-STR-007
+    title: Factors of safety and load cases
+    equation: "FoS = sigma_y / sigma; require FoS>=2 cruise, >=2.5 aggressive, >=3 emergency; F_emerg=1.5*F_agg"
+    variables: {}
+    units: {}
+    reference: "User V1 freeze"
+    validity: "PLA yield-based"
+    implementation_module: domain.structural.beam
+    verification_notebook: verify_structural_analysis.ipynb
+    tests: [test_EQ_STR_007]
+    status: approved
+
+  # ── Servo ─────────────────────────────────────────────────────────
+  - id: EQ-SRV-001
+    title: Required servo torque
+    equation: "T_req = abs(H) / eta   # eta=1.0 V1"
+    variables: {H: "Hinge moment [N·m]", eta: "efficiency"}
+    units: {T_req: "N·m"}
+    reference: "User freeze"
+    validity: "Direct drive; shaft at 25% MAC"
+    implementation_module: domain.servo.analysis
+    verification_notebook: verify_servo_analysis.ipynb
+    tests: [test_EQ_SRV_001]
+    status: approved
+
+  - id: EQ-SRV-002
+    title: Servo utilization limits
+    equation: "util = T_req / T_rated; fail if util>0.70 continuous or >0.90 peak"
+    variables: {}
+    units: {}
+    reference: "User V1 freeze"
+    validity: "Peak vs continuous distinguished by load case"
+    implementation_module: domain.servo.analysis
+    verification_notebook: verify_servo_analysis.ipynb
+    tests: [test_EQ_SRV_002]
+    status: approved
+
+  # ── NACA geometry ─────────────────────────────────────────────────
+  - id: EQ-NACA-001
+    title: NACA 4-digit thickness distribution
+    equation: "yt = 5*t*(0.2969*sqrt(x)-0.1260*x-0.3516*x**2+0.2843*x**3-0.1015*x**4)"
+    variables: {t: "thickness ratio", x: "x/c in [0,1]"}
+    units: {yt: "y/c"}
+    reference: "Abbott & von Doenhoff, Theory of Wing Sections"
+    validity: "NACA 4-digit; closed TE modified -0.1036 optional later"
+    implementation_module: domain.airfoil.naca
+    verification_notebook: verify_airfoil_selection.ipynb
+    tests: [test_EQ_NACA_001]
+    status: approved
