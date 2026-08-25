@@ -32,7 +32,7 @@ dev = [
 ]
 opt = ["pymoo>=0.6"]
 cad = ["cadquery>=2.4"]
-gui = ["PySide6>=6.6", "pyvista>=0.43"]
+gui = ["PySide6>=6.6"]
 
 [project.scripts]
 auv-fin = "auv_fin_design.application.cli:main"

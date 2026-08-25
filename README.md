@@ -15,14 +15,15 @@ This is **not** a geometry generator, CAD plugin, or simple calculator. It is an
 5. [Coordinate systems and conventions](#coordinate-systems-and-conventions)
 6. [Data sources (polars vs Cp)](#data-sources-polars-vs-cp)
 7. [Quick start](#quick-start)
-8. [Golden vehicle benchmark](#golden-vehicle-benchmark)
-9. [Repository layout (every folder)](#repository-layout-every-folder)
-10. [Source code reference (every file)](#source-code-reference-every-file)
-11. [Configuration and equations](#configuration-and-equations)
-12. [Tests, verification, and CI](#tests-verification-and-ci)
-13. [Generated outputs](#generated-outputs)
-14. [Known limitations and roadmap](#known-limitations-and-roadmap)
-15. [Further reading](#further-reading)
+8. [Desktop GUI](#desktop-gui)
+9. [Golden vehicle benchmark](#golden-vehicle-benchmark)
+10. [Repository layout (every folder)](#repository-layout-every-folder)
+11. [Source code reference (every file)](#source-code-reference-every-file)
+12. [Configuration and equations](#configuration-and-equations)
+13. [Tests, verification, and CI](#tests-verification-and-ci)
+14. [Generated outputs](#generated-outputs)
+15. [Known limitations and roadmap](#known-limitations-and-roadmap)
+16. [Further reading](#further-reading)
 
 ---
 
@@ -33,8 +34,8 @@ Given a torpedo AUV and a maneuvering requirement, the suite computes:
 | Stage | What is computed |
 |-------|-------------------|
 | **Vehicle** | Volume, displacement, CG, fin station, added mass estimates |
-| **Hydrodynamics** | Reynolds number, ITTC friction, Hoerner drag, dynamic pressure |
-| **Maneuvering** | Required yaw moment, control authority, design load factor |
+| **Hydrodynamics** | Reynolds number, ITTC friction, Hoerner drag, dynamic pressure, Fossen yaw damping polynomial |
+| **Maneuvering** | Required yaw moment (inertial + added mass + yaw damping), control authority, design load factor |
 | **Control allocation** | Per-fin lift for an aft X-tail (4 fins), lever arms |
 | **Fin sizing** | Area, span, root/tip chord, taper, MAC, thickness, mass, corner coordinates |
 | **Airfoil selection** | Rank NACA candidates from XFOIL polars at MAC Reynolds number |
@@ -47,9 +48,10 @@ Given a torpedo AUV and a maneuvering requirement, the suite computes:
 | **Manufacturing** | Printability, wall thickness, TE thickness recommendations |
 | **Sensitivity** | ±10% perturbation on key inputs |
 | **Optimization** | Optional NSGA-II (drag vs mass) via `pymoo` |
+| **Design diagnosis** | All blocking violations with suggested corrections |
 | **Export** | JSON/TXT/HTML reports, STL, STEP wire, Fusion 360 params, Gazebo SDF, ROS 2 URDF |
 
-The user does **not** specify fin dimensions by default — the solver derives them. Optional overrides for root chord, span, and tip chord are supported in the GUI.
+The user does **not** specify fin dimensions by default — the solver derives them. Optional overrides for root chord, span, and tip chord are supported in the [Desktop GUI](#desktop-gui).
 
 ---
 
@@ -60,7 +62,7 @@ These principles govern the codebase (see also `FinDesigner_Software_Design_Spec
 1. **Physics first** — Equations over arbitrary constants; every formula is registered with an ID.
 2. **No magic numbers** — Engineering defaults live in `configs/defaults.yaml`, not scattered in code.
 3. **Traceability** — `docs/equations/equation_register.yaml` is the mathematical constitution; production modules reference equation IDs.
-4. **Separation of concerns** — `domain/` (pure engineering), `application/` (orchestration), `infrastructure/` (config), `ui/` (PySide6), `adapters/` (external formats).
+4. **Separation of concerns** — `domain/` (pure engineering), `application/` (orchestration), `infrastructure/` (config), `ui/gui/` (PySide6 desktop), `adapters/` (external formats).
 5. **Verification** — Jupyter notebooks under `verification/` recompute results independently.
 6. **Replaceable data** — Airfoil Cp archives use a fixed CSV layout so bootstrap data can be swapped for real XFOIL dumps without code changes.
 
@@ -99,14 +101,30 @@ flowchart TD
 
 ### Pass / fail criteria (`DesignResult.passed`)
 
-All must be true:
+`DesignResult.passed` is driven by `diagnose_design()` in `domain/validation/design_diagnosis.py`. A design passes only when there are **no blocking violations**. Checks include:
 
-- No geometry constraint violations (span, tip chord, TE thickness, etc.)
-- Shaft fits at hinge (25% chord local thickness ≥ `shaft_clearance_factor × shaft_diameter`)
-- Hydrodynamic validation OK (authority, stall margin)
-- Structure FoS and tip deflection OK (cruise, aggressive, emergency)
-- Servo continuous utilization and shaft stress OK
-- Manufacturing printable
+- Geometry constraints (span, tip chord, TE thickness, etc.)
+- Shaft fit at hinge (25% chord local thickness ≥ `shaft_clearance_factor × shaft_diameter`)
+- Hydrodynamic validation (authority, stall margin)
+- Structure FoS and tip deflection (cruise, aggressive, emergency)
+- Servo continuous utilization and shaft stress
+- Manufacturing printability
+
+Diagnosis lists **every** failure with category, message, and suggested corrections (shown in the GUI and in reports).
+
+### Yaw hydrodynamic moment
+
+Resistive yaw moment uses a Fossen-style polynomial (EQ-HYD-018 / EQ-MAN-005):
+
+```text
+N = N_r·r + N_v·v + N_rrr·r³ + N_vvr·v²·r + N_vrr·v·r² + N_vvv·v³
+```
+
+- **r** — yaw rate [rad/s]; **v** — sway (lateral body velocity) [m/s]
+- No standalone **r²** term (even powers are unphysical for rotational damping)
+- Without tank/CFD data, all six coefficients are **bootstrapped** from Hoerner hull cross-flow and reference kinematics `r_ref = V/R`, `V_ref` (EQ-HYD-020)
+- Configure under `hydrodynamics.yaw_damping` in `configs/defaults.yaml`; any coefficient can be overridden when measurements exist
+- At design with default `lateral_speed_mps: 0`, sizing uses `N_r·r + N_rrr·r³`
 
 ---
 
@@ -146,6 +164,8 @@ When enabled, the solver keeps these dimensions and warns if lift cannot be met.
 | **Maneuver deflection** | Required vs usable fin deflection for design maneuver |
 | **Structure** | Stress, FoS, tip deflection per load case |
 | **Servo** | Torque utilization, shaft OK, actuation time |
+| **Yaw damping** | Full Fossen coefficient set (`N_r`, `N_v`, cubics) |
+| **Diagnosis** | Pass/fail, all violations, suggested corrections |
 | **Reports & CAD** | See [Generated outputs](#generated-outputs) |
 
 ---
@@ -227,21 +247,18 @@ Used for NACA thickness at 25% chord (shaft fit) and STL export.
 ## Quick start
 
 ```bash
-cd /home/samyak/fins
+cd /path/to/Fin-Designer   # or your local clone
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev,gui]"
 pytest -q
 ```
 
-### Desktop GUI
+Optional extras:
 
 ```bash
-auv-fin-gui
-# or
-python -m auv_fin_design.ui.app
-# or
-auv-fin --gui
+pip install -e ".[opt]"    # NSGA-II (pymoo)
+pip install -e ".[cad]"    # CadQuery solid export
 ```
 
 ### CLI (golden vehicle, JSON to stdout)
@@ -252,6 +269,7 @@ auv-fin --golden --export-all          # reports + simulation bundle
 auv-fin --golden --optimize            # optional NSGA-II (pip install -e ".[opt]")
 auv-fin --golden --max-span-over-d 0.55
 auv-fin --airfoil NACA0012 --material PLA
+auv-fin --gui                          # same as auv-fin-gui
 ```
 
 Exit code `0` = design passed all checks; `2` = failed (still prints JSON).
@@ -261,6 +279,84 @@ Exit code `0` = design passed all checks; `2` = failed (still prints JSON).
 ```bash
 python scripts/generate_cp_dataset.py
 ```
+
+---
+
+## Desktop GUI
+
+PySide6 desktop application with a deep-ocean theme. Entry points:
+
+```bash
+auv-fin-gui
+# or
+python -m auv_fin_design.ui.app
+# or
+auv-fin --gui
+```
+
+Install GUI dependencies with `pip install -e ".[gui]"` (PySide6). Matplotlib remains available for notebooks; the desktop UI does **not** require PyVista or other 3D toolkits.
+
+### Layout
+
+| Region | Role |
+|--------|------|
+| **Toolbar / menu** | Run Design, Load Golden Vehicle, Export Report, Export CAD/Sim |
+| **Left panel** | Collapsible input groups (Vehicle, Mission, Servo & Shaft, Fin & Material, Analysis Options, Fixed Fin Dimensions) |
+| **Pipeline steps** | Hydrodynamics → Control → Sizing → CoP → Structure → Validation |
+| **Results sidebar** | Jump to any output section; filter by name |
+| **Status bar** | Shortcuts and run feedback |
+
+The design pipeline runs on a **background thread** so the window stays responsive during sensitivity or optimization.
+
+### Keyboard shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+R` | Run design |
+| `Ctrl+G` | Load golden vehicle |
+| `Ctrl+E` | Export engineering reports |
+| `Ctrl+Shift+E` | Export CAD / simulation bundle |
+
+### Inputs
+
+- Vehicle: length, diameter, mass, water type
+- Mission: design/max speed, turn radius, turn establishment time
+- Servo: rated torque (default **3.481 N·m** = 35.5 kg·cm), shaft diameter
+- Fin station: root LE / L, max span/D, airfoil `(auto)` or forced NACA folder
+- Optional fixed root chord, span, tip chord
+- Toggles: ±10% sensitivity, NSGA-II (slow; needs `pymoo`)
+- Live hints: slenderness L/D, design yaw rate `r = V/R`, input validation
+
+### Results sections (full pipeline payload)
+
+After **Run Design**, every engineering output is available in the sidebar:
+
+| Section | Content |
+|---------|---------|
+| **Overview** | Pass/fail banner, status chips, key metric tiles, margin bars |
+| **Fin Dimensions** | Span, chords, MAC, planform, section thickness, shaft width, corner table, mm build sheet, copy-to-clipboard |
+| **Diagnosis** | Expandable violations tree and suggested corrections |
+| **Geometry** | Full searchable geometry dictionary |
+| **Hydrodynamics** | Re, drag, added mass, **yaw damping coefficients**, design `r` and `v` |
+| **Control** | Moment breakdown (inertial, added, damping, design) + X-tail allocation |
+| **Aero & CoP** | Finite-wing aero + integrated CoP (without strip table) |
+| **Strips** | Sortable per-strip CoP / lift table |
+| **Structure** | Cruise / aggressive / emergency load cases |
+| **Servo & Shaft** | Utilization, FoS, shaft fit |
+| **Validation** | Hydrodynamic validation margins and messages |
+| **Manufacturing** | Process, orientation, notes |
+| **Sensitivity** | ±10% tornado-style table when enabled |
+| **Optimization** | NSGA-II summary when enabled |
+| **Trace** | Sizing iteration history, warnings, equation IDs |
+| **Exports** | Click-to-copy paths after export |
+| **Raw JSON** | Complete `design_result_payload()` dump |
+
+Tables support **filter**, **sort**, and **double-click to copy**. Metric tiles on Overview and Fin Dimensions also copy on double-click.
+
+### Exports from the GUI
+
+- **Export Report** → `reports/engineering_report.{json,txt,html}`
+- **Export CAD/Sim** → `exports/sim_bundle/` (STL, STEP wire, Fusion params, Gazebo SDF, ROS 2 URDF, hydro params)
 
 ---
 
@@ -376,9 +472,12 @@ Production package — see [Source code reference](#source-code-reference-every-
 |------|---------|
 | `unit/test_vehicle.py` | Vehicle / mission models |
 | `unit/test_hydrodynamics.py` | Drag, Reynolds, dynamic pressure |
+| `unit/test_yaw_damping.py` | Fossen yaw polynomial and cross-flow bootstrap |
 | `unit/test_control.py` | Maneuvering and X-tail allocation |
 | `unit/test_geometry_aero.py` | Fin sizing, finite wing, NACA |
 | `unit/test_center_of_pressure.py` | CoP integration, strips, providers |
+| `unit/test_design_diagnosis.py` | Pass/fail diagnosis and corrections |
+| `unit/test_gui_payload.py` | GUI payload completeness vs `design_result_payload()` |
 | `unit/test_equation_register.py` | Equation register integrity |
 | `unit/test_stl_export.py` | STL mesh export |
 | `integration/test_full_pipeline.py` | End-to-end pipeline smoke |
@@ -422,10 +521,18 @@ Package root: `src/auv_fin_design/`
 
 ### `ui/` — PySide6 desktop app
 
-| File | Responsibility |
+| Path | Responsibility |
 |------|----------------|
 | `app.py` | GUI entry point (`auv-fin-gui`) |
-| `main_window.py` | Main window: vehicle/mission/servo inputs, optional fin dimensions, run design, display results (dimensions mm, CoP, shaft fit, structure, servo), export buttons |
+| `main_window.py` | Compatibility shim → `ui.gui.main_window` |
+| `gui/main_window.py` | Main window: menu, shortcuts, async pipeline worker, input/results layout |
+| `gui/themes/dark_ocean.qss` | Deep-ocean stylesheet |
+| `gui/viewmodels/design_result_vm.py` | Wraps `DesignResult` + shared `design_result_payload()` |
+| `gui/workers/pipeline_worker.py` | `QThread` runner for `run_design_pipeline()` |
+| `gui/widgets/input_panel.py` | Collapsible vehicle/mission/servo/fin inputs + live hints |
+| `gui/widgets/results_panel.py` | Sidebar navigation over all result sections |
+| `gui/widgets/fin_dimensions_panel.py` | Dedicated fin dimensions dashboard (mm build sheet, corners, copy) |
+| `gui/widgets/common.py` | Metric tiles, margin bars, searchable/sortable tables, section cards |
 
 ### `adapters/` — external format bridges
 
@@ -450,12 +557,13 @@ Package root: `src/auv_fin_design/`
 | File | Responsibility |
 |------|----------------|
 | `estimator.py` | `estimate_hydrodynamics()` — ITTC-57 friction, Hoerner streamlined drag, crossflow, added mass — EQ-HYD-* |
+| `yaw_damping.py` | Fossen yaw polynomial `N(v,r)`, Hoerner cross-flow anchor, bootstrap of all cubic terms — EQ-HYD-015/018/019/020 |
 
 ### `domain/control/`
 
 | File | Responsibility |
 |------|----------------|
-| `maneuvering.py` | `compute_control_requirement()` — yaw moment from turn kinematics — EQ-MAN-* |
+| `maneuvering.py` | `compute_control_requirement()` — yaw moment from turn kinematics + yaw damping polynomial — EQ-MAN-* |
 | `allocation.py` | `allocate_x_tail_yaw()` — 4-fin X-tail lift split, lever arms — EQ-ALLOC-* |
 
 ### `domain/geometry/`
@@ -513,6 +621,7 @@ Package root: `src/auv_fin_design/`
 |------|----------------|
 | `hydro.py` | `validate_hydrodynamics()` — authority margin, stall margin, overall OK |
 | `sensitivity.py` | `run_sensitivity()` — ±10% on length, diameter, mass, speed, turn radius |
+| `design_diagnosis.py` | `diagnose_design()` — collect every blocking violation with suggested corrections |
 
 ### `domain/manufacturing/`
 
@@ -532,7 +641,7 @@ Package root: `src/auv_fin_design/`
 | File | Responsibility |
 |------|----------------|
 | `report.py` | `result_to_dict()`, Markdown report |
-| `export.py` | JSON, plain text, HTML reports; `write_all_reports()` |
+| `export.py` | `design_result_payload()` (shared by GUI + JSON), text/HTML reports, `write_all_reports()` |
 
 ### `domain/constants/`
 
@@ -561,11 +670,11 @@ Placeholder package (`__init__.py` only) for future shared helpers.
 | `sizing` | Initial CL, AR, taper, sweep, Oswald e, stall margin, iteration limits |
 | `maneuvering` | Control margin, emergency load factor |
 | `structure` | FoS cruise/aggressive/emergency, tip deflection limit |
-| `servo` | Rated torque, shaft diameter, max rotation, efficiency, utilization limits |
+| `servo` | Rated torque (default 3.481 N·m), shaft diameter, max rotation, efficiency, utilization limits |
 | `geometry_constraints` | max span/D, min tip chord, min TE/wall thickness, shaft clearance factor |
 | `airfoil_ranking_weights` | Weighted score for airfoil auto-selection |
 | `optimization` | NSGA-II population, generations, objectives |
-| `hydrodynamics` | Crossflow Cd, axial added-mass factor |
+| `hydrodynamics` | Crossflow Cd, axial added-mass factor, **yaw_damping** (`estimate_all_terms`, `lateral_speed_mps`, `reference_speed_mps`, optional coefficient overrides) |
 | `center_of_pressure` | Provider, strip count, integration tolerance, verification tolerances, hinge fraction |
 | `tolerances` | Engineering and geometry relative tolerances |
 
@@ -575,7 +684,7 @@ Placeholder package (`__init__.py` only) for future shared helpers.
 |--------|-------|-----------------|
 | EQ-FLUID-* | Water properties | 2 |
 | EQ-VEH-* | Vehicle geometry, CG, fin station | 6 |
-| EQ-HYD-* | Drag, Reynolds, dynamic pressure, validation | 17 |
+| EQ-HYD-* | Drag, Reynolds, dynamic pressure, yaw damping, validation | 20+ |
 | EQ-MAN-* | Maneuvering loads | 7 |
 | EQ-ALLOC-* | Control allocation | 4 |
 | EQ-GEO-* | Fin planform sizing | 7 |
@@ -592,6 +701,7 @@ Entries may be marked `proposed` until engineering approval; see register for st
 ## Tests, verification, and CI
 
 ```bash
+export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1   # recommended if ROS launch_testing is installed
 pytest -q                    # all tests
 pytest tests/unit -q         # unit only
 pytest tests/integration -q  # pipeline integration
@@ -640,6 +750,7 @@ When using `--export-all` or GUI export:
 | CFD / experimental CoP providers | Stubs only |
 | NSGA-II | Optional; requires `pip install -e ".[opt]"` |
 | CadQuery solid export | Optional extra `[cad]` |
+| Yaw damping coefficients | Bootstrapped from hull cross-flow when tank/CFD fits are unavailable; override in `defaults.yaml` |
 
 See `FinDesigner_Software_Design_Specification.md` for the full product roadmap.
 
@@ -657,4 +768,4 @@ See `FinDesigner_Software_Design_Specification.md` for the full product roadmap.
 
 ---
 
-*AUV Fin Design & Optimization Suite — physics-based automatic fin sizing for torpedo AUVs.*
+*AUV Fin Design & Optimization Suite - physics-based automatic fin sizing for torpedo AUVs.*

@@ -334,15 +334,59 @@ equations:
     status: proposed
 
   - id: EQ-HYD-016
-    title: Linear yaw damping via operating-point linearization
-    equation: "N_r = 2 * N_r_abs_r * abs(r_op)"
+    title: Linear yaw damping via operating-point linearization (superseded by EQ-HYD-018)
+    equation: "N_r = 2 * N_r_abs_r * abs(r_op)  [legacy V1; replaced by polynomial]"
     variables: {N_r_abs_r: "Quadratic coeff", r_op: "Operating yaw rate [rad/s]"}
     units: {N_r: "kg·m^2/s"}
     reference: "Standard linearization of quadratic drag; Fossen damping decomposition"
-    validity: "Local to r_op = V_design / R_turn for design case; no tank-test IDs"
-    implementation_module: domain.hydrodynamics.estimator
+    validity: "Superseded — use EQ-HYD-018 polynomial"
+    implementation_module: domain.hydrodynamics.yaw_damping
     verification_notebook: verify_hydrodynamics.ipynb
-    tests: [test_EQ_HYD_016]
+    tests: [test_yaw_polynomial_matches_crossflow_at_design_r]
+    status: superseded
+
+  - id: EQ-HYD-018
+    title: Fossen polynomial yaw hydrodynamic moment
+    equation: "N = N_r*r + N_v*v + N_rrr*r**3 + N_vvr*v**2*r + N_vrr*v*r**2 + N_vvv*v**3"
+    variables: {v: "Sway velocity [m/s]", r: "Yaw rate [rad/s]"}
+    units: {N: "N·m"}
+    reference: "Fossen 2nd Ed.; 3-DOF damping subset"
+    validity: "Planar maneuver; v=0 coordinated turn default"
+    implementation_module: domain.hydrodynamics.yaw_damping
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_yaw_polynomial_matches_crossflow_at_design_r, test_yaw_polynomial_v_terms]
+    status: approved
+
+  - id: EQ-HYD-019
+    title: Cubic yaw coefficient from Hoerner cross-flow calibration
+    equation: "N_rrr = -N_cross / r_op;  N_cross = (1/32)*rho*Cd_cross*D*L**4;  N_r = 0"
+    variables: {r_op: "V/R_turn", N_cross: "Cross-flow moment scale at |r|r ~ r²"}
+    units: {N_rrr: "N·m·s²/rad²"}
+    reference: "Hoerner cross-flow; cubic-only (odd in r, no r² term)"
+    notes: "No tank data — sway terms zero; v=0 at design. Override in yaw_damping config."
+    validity: "Cubic r³ only for rotational damping; N_vrr must remain 0"
+    implementation_module: domain.hydrodynamics.yaw_damping
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_EQ_HYD_golden_added_mass_and_damping]
+    status: approved
+
+  - id: EQ-HYD-020
+    title: Bootstrap all yaw damping polynomial terms from cross-flow
+    equation: >
+      N_rrr = -N_cross/r_ref;
+      N_r = 3*N_rrr*r_ref²;
+      N_v = N_rrr*r_ref²/V_ref + N_v_geom;
+      N_vvv = N_rrr*r_ref²/V_ref²;
+      N_vvr = 2*N_rrr*r_ref/V_ref;
+      N_vrr = N_rrr/V_ref;
+      N_v_geom = -rho*Cd_cross*D*L*(x_cg - L/2)
+    variables: {r_ref: "V/R_turn", V_ref: "design speed", N_cross: "EQ-HYD-015"}
+    units: {}
+    reference: "Hoerner cross-flow anchor + dimensional scaling (no tank data)"
+    validity: "Replace with CFD/tank measurements when available; override per coefficient in yaml"
+    implementation_module: domain.hydrodynamics.yaw_damping
+    verification_notebook: verify_hydrodynamics.ipynb
+    tests: [test_bootstrap_yaw_damping_all_terms]
     status: proposed
 
   - id: EQ-HYD-017
@@ -407,15 +451,15 @@ equations:
     status: approved
 
   - id: EQ-MAN-005
-    title: Hydrodynamic yaw damping moment
-    equation: "M_D = N_r * r + N_r_abs_r * abs(r) * r"
-    variables: {N_r: "linear", N_r_abs_r: "quadratic", r: "yaw rate"}
+    title: Hydrodynamic yaw damping moment (Fossen polynomial)
+    equation: "M_D = N_r*r + N_v*v + N_rrr*r**3 + N_vvr*v**2*r + N_vrr*v*r**2 + N_vvv*v**3"
+    variables: {N_r: "linear yaw", N_v: "sway-yaw", N_rrr: "cubic yaw", v: "sway m/s", r: "yaw rad/s"}
     units: {M_D: "N·m"}
-    reference: "Fossen damping model"
-    validity: "Planar yaw"
+    reference: "Fossen damping model; EQ-HYD-018"
+    validity: "Planar yaw; default v=0 (zero sideslip)"
     implementation_module: domain.control.maneuvering
     verification_notebook: verify_control_allocation.ipynb
-    tests: [test_EQ_MAN_005]
+    tests: [test_EQ_MAN_golden, test_yaw_polynomial_matches_crossflow_at_design_r]
     status: approved
 
   - id: EQ-MAN-006

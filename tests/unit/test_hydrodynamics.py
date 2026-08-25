@@ -9,6 +9,7 @@ from auv_fin_design.domain.hydrodynamics.estimator import (
     estimate_hydrodynamics,
     ittc_1957_cf,
 )
+from auv_fin_design.domain.hydrodynamics.yaw_damping import crossflow_yaw_reference
 from auv_fin_design.domain.vehicle.model import MissionModel, VehicleModel
 
 
@@ -35,8 +36,13 @@ def test_EQ_HYD_golden_added_mass_and_damping():
     n = rho * math.pi * R**2 * L**3 / 12.0
     assert abs(h.Y_vdot - y) / y < 0.01
     assert abs(h.N_rdot - n) / n < 0.01
-    nrr = -(1.0 / 32.0) * rho * 1.0 * v.diameter * L**4
-    assert abs(h.N_r_abs_r - nrr) / abs(nrr) < 0.01
+    n_cross = crossflow_yaw_reference(
+        rho, v.diameter, L, cd_cross=1.0
+    )
     r_op = 1.5 / 6.0
-    assert abs(h.N_r - 2 * nrr * abs(r_op)) / abs(h.N_r) < 0.01
+    assert abs(h.yaw_damping.N_rrr - (-n_cross / r_op)) / abs(n_cross / r_op) < 0.01
+    assert h.yaw_damping.N_r != 0.0
+    assert h.yaw_damping.N_vvr != 0.0
+    assert h.design_yaw_rate_rad_s == r_op
+    assert h.design_lateral_speed_mps == 0.0
     assert h.wake_fraction == 0.0

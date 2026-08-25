@@ -72,6 +72,13 @@ optimization:
 hydrodynamics:
   crossflow_cd: 1.0
   axial_added_mass_factor: 0.1
+  # Yaw moment: N = N_r*r + N_v*v + N_rrr*r³ + N_vvr*v²r + N_vrr*v*r² + N_vvv*v³
+  # v = sway [m/s], r = yaw rate [rad/s]. No tank data → estimate_all_terms (EQ-HYD-020).
+  yaw_damping:
+    estimate_all_terms: true
+    lateral_speed_mps: 0.0
+    reference_speed_mps: 1.5
+    N_rrr_scale: 1.0
 
 center_of_pressure:
   provider: xfoil_file
