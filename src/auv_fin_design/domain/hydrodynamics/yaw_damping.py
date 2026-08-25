@@ -79,15 +79,19 @@ def bootstrap_yaw_damping_from_crossflow(
 ) -> dict[str, float]:
     """Analytical bootstrap for all polynomial terms when tank data are unavailable.
 
-    EQ-HYD-020 — anchored on Hoerner N_rrr, scaled to reference kinematics (V_ref, r_ref).
+    EQ-HYD-020 — anchored on Hoerner N_cross, scaled to reference kinematics (V_ref, r_ref).
 
-    Sources:
-      N_rrr  — Hoerner cross-flow on hull (primary)
-      N_r    — slope of N_rrr·r³ at r_ref: d/dr(N_rrr r³) = 3 N_rrr r_ref²
-      N_v    — cross-flow sway–yaw + CG offset: N_rrr r_ref²/V_ref − ρ Cd D L (x_cg − L/2)
-      N_vvv  — cubic sway: N_rrr r_ref² / V_ref²
-      N_vvr  — mixed: 2 N_rrr r_ref / V_ref
-      N_vrr  — mixed (degree 3): N_rrr / V_ref
+    At r = r_ref, v = 0 the full polynomial matches the cross-flow moment:
+      N_r·r_ref + N_rrr·r_ref³ = −N_cross·r_ref²
+
+    with N_r = 3·N_rrr·r_ref² (slope of the cubic at r_ref), which implies:
+      N_rrr = −N_cross / (4·r_ref)
+
+    Other terms:
+      N_v    — N_rrr·r_ref²/V_ref − ρ·Cd·D·L·(x_cg − L/2)
+      N_vvv  — N_rrr·r_ref² / V_ref²
+      N_vvr  — 2·N_rrr·r_ref / V_ref
+      N_vrr  — N_rrr / V_ref
 
     Replace any value with tank/CFD measurements in configs/defaults.yaml → yaw_damping.
     """
@@ -124,7 +128,11 @@ def estimate_yaw_damping_coefficients(
     """Build full yaw damping polynomial coefficients.
 
     With ``estimate_all_terms: true`` (default) and no tank data:
-      all six coefficients are bootstrapped from Hoerner cross-flow + (V_ref, r_ref).
+      all six coefficients are bootstrapped from Hoerner cross-flow + (V_ref, r_ref),
+      with N_rrr scaled by 1/4 so N_r·r + N_rrr·r³ matches −N_cross·r² at r_ref.
+
+    With ``estimate_all_terms: false`` (cubic-only):
+      N_rrr = −N_cross/r_ref so N_rrr·r³ matches −N_cross·r² at r_ref; other terms zero.
 
     Override any single coefficient in ``yaw_damping`` config; omitted keys use bootstrap.
     """
@@ -139,11 +147,15 @@ def estimate_yaw_damping_coefficients(
     n_cross = crossflow_yaw_reference(
         rho, diameter_m, length_m, cd_cross=crossflow_cd
     )
+    r_safe = max(abs(r_ref), 1e-9)
 
     if "N_rrr" in cfg:
         n_rrr = float(cfg["N_rrr"])
+    elif estimate_all:
+        # Full poly at r_ref: 4·N_rrr·r_ref³ = −N_cross·r_ref²  →  N_rrr = −N_cross/(4·r_ref)
+        n_rrr = -n_rrr_scale * n_cross / (4.0 * r_safe)
     else:
-        n_rrr = -n_rrr_scale * n_cross / max(abs(r_ref), 1e-9)
+        n_rrr = -n_rrr_scale * n_cross / r_safe
 
     if estimate_all:
         defaults = bootstrap_yaw_damping_from_crossflow(

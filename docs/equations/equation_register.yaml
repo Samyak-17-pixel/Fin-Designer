@@ -373,8 +373,9 @@ equations:
   - id: EQ-HYD-020
     title: Bootstrap all yaw damping polynomial terms from cross-flow
     equation: >
-      N_rrr = -N_cross/r_ref;
+      N_rrr = -N_cross/(4*r_ref);
       N_r = 3*N_rrr*r_ref²;
+      (implies N_r*r_ref + N_rrr*r_ref³ = -N_cross*r_ref²);
       N_v = N_rrr*r_ref²/V_ref + N_v_geom;
       N_vvv = N_rrr*r_ref²/V_ref²;
       N_vvr = 2*N_rrr*r_ref/V_ref;
@@ -386,7 +387,7 @@ equations:
     validity: "Replace with CFD/tank measurements when available; override per coefficient in yaml"
     implementation_module: domain.hydrodynamics.yaw_damping
     verification_notebook: verify_hydrodynamics.ipynb
-    tests: [test_bootstrap_yaw_damping_all_terms]
+    tests: [test_bootstrap_yaw_damping_all_terms, test_full_poly_matches_crossflow_magnitude]
     status: proposed
 
   - id: EQ-HYD-017

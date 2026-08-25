@@ -623,3 +623,16 @@ def load_golden_vehicle() -> tuple[VehicleModel, MissionModel]:
         max_speed=float(m.get("max_speed_mps", m["design_speed_mps"] * 1.25)),
     )
     return vehicle, mission
+
+
+def load_golden_servo() -> ServoSpecification:
+    """Servo specs from golden_vehicle.yaml (may differ from configs/defaults.yaml)."""
+    from auv_fin_design.infrastructure.config.loader import load_yaml
+
+    path = repo_root() / "benchmarks" / "golden_vehicle" / "golden_vehicle.yaml"
+    s = load_yaml(path)["servo"]
+    return ServoSpecification(
+        rated_torque=float(s["rated_torque_nm"]),
+        shaft_diameter=float(s["shaft_diameter_m"]),
+        max_rotation_deg=float(s.get("max_rotation_deg", 180.0)),
+    )

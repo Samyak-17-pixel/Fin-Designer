@@ -19,9 +19,6 @@ def test_yaw_polynomial_matches_crossflow_at_design_r():
     m = MissionModel(design_speed=1.5, turning_radius=6.0, turn_establishment_time=30.0)
     h = estimate_hydrodynamics(v, m)
     r_op = 1.5 / 6.0
-    n_cross = crossflow_yaw_reference(
-        v.fluid.density, v.diameter, v.length, cd_cross=1.0
-    )
     # Full polynomial at r_op, v=0: N_r*r + N_rrr*r³
     c = h.yaw_damping
     m_expected = c.N_r * r_op + c.N_rrr * r_op**3
@@ -29,6 +26,20 @@ def test_yaw_polynomial_matches_crossflow_at_design_r():
         h.design_lateral_speed_mps, r_op, h.yaw_damping
     )
     assert abs(m_new - m_expected) / abs(m_expected) < 0.01
+
+
+def test_full_poly_matches_crossflow_magnitude():
+    """At r_ref, v=0: |N_r·r + N_rrr·r³| ≈ N_cross·r² (EQ-HYD-020 calibration)."""
+    v = VehicleModel(length=1.35, diameter=0.1685, mass=24.0, water="freshwater")
+    m = MissionModel(design_speed=1.5, turning_radius=6.0, turn_establishment_time=30.0)
+    h = estimate_hydrodynamics(v, m)
+    r_op = 1.5 / 6.0
+    n_cross = crossflow_yaw_reference(
+        v.fluid.density, v.diameter, v.length, cd_cross=1.0
+    )
+    m_poly = yaw_hydrodynamic_moment(0.0, r_op, h.yaw_damping)
+    m_hoerner = -n_cross * r_op**2
+    assert abs(m_poly - m_hoerner) / abs(m_hoerner) < 0.01
 
 
 def test_bootstrap_yaw_damping_all_terms():
@@ -50,7 +61,7 @@ def test_bootstrap_matches_helper():
     d, L = 0.1685, 1.35
     r_ref, v_ref = 0.25, 1.5
     n_cross = crossflow_yaw_reference(rho, d, L)
-    n_rrr = -n_cross / r_ref
+    n_rrr = -n_cross / (4.0 * r_ref)
     boot = bootstrap_yaw_damping_from_crossflow(
         n_rrr,
         r_ref_rad_s=r_ref,
@@ -70,7 +81,7 @@ def test_bootstrap_matches_helper():
         x_cg_m=0.5 * L,
         yaw_cfg={"estimate_all_terms": True},
     )
-    for key in ("N_r", "N_v", "N_vvr", "N_vrr", "N_vvv"):
+    for key in ("N_r", "N_v", "N_rrr", "N_vvr", "N_vrr", "N_vvv"):
         assert abs(getattr(coeffs, key) - boot[key]) / max(abs(boot[key]), 1e-30) < 1e-9
 
 
