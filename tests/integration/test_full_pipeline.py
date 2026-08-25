@@ -5,7 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from auv_fin_design.adapters.export_bundle import export_simulation_bundle
-from auv_fin_design.application.pipeline import load_golden_vehicle, run_design_pipeline
+from auv_fin_design.application.pipeline import (
+    load_golden_servo,
+    load_golden_vehicle,
+    run_design_pipeline,
+)
 from auv_fin_design.domain.constants.materials import get_material
 from auv_fin_design.domain.reporting.export import write_all_reports
 from auv_fin_design.infrastructure.config.loader import load_defaults, repo_root
@@ -18,6 +22,7 @@ def test_golden_passes_with_default_packaging():
         vehicle,
         mission,
         material=get_material("PLA"),
+        servo=load_golden_servo(),
         run_sensitivity=False,
         run_optimization=False,
     )
@@ -30,7 +35,11 @@ def test_golden_passes_with_default_packaging():
 def test_sensitivity_runs():
     vehicle, mission = load_golden_vehicle()
     result = run_design_pipeline(
-        vehicle, mission, run_sensitivity=True, run_optimization=False
+        vehicle,
+        mission,
+        servo=load_golden_servo(),
+        run_sensitivity=True,
+        run_optimization=False,
     )
     assert result.sensitivity is not None
     assert len(result.sensitivity.points) == 6  # 3 params × ±10%
@@ -39,7 +48,11 @@ def test_sensitivity_runs():
 def test_exports_bundle_and_reports(tmp_path: Path):
     vehicle, mission = load_golden_vehicle()
     result = run_design_pipeline(
-        vehicle, mission, run_sensitivity=False, run_optimization=False
+        vehicle,
+        mission,
+        servo=load_golden_servo(),
+        run_sensitivity=False,
+        run_optimization=False,
     )
     reports = write_all_reports(result, tmp_path / "reports")
     assert reports["json"].exists()
@@ -58,6 +71,7 @@ def test_material_petg():
         vehicle,
         mission,
         material=get_material("PETG"),
+        servo=load_golden_servo(),
         run_sensitivity=False,
         run_optimization=False,
     )
@@ -71,6 +85,7 @@ def test_optional_dimension_override():
     result = run_design_pipeline(
         vehicle,
         mission,
+        servo=load_golden_servo(),
         geometry_override=GeometryOverride(root_chord_m=0.12, span_m=0.08),
         run_sensitivity=False,
         run_optimization=False,

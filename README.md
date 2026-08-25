@@ -122,7 +122,7 @@ N = N_r·r + N_v·v + N_rrr·r³ + N_vvr·v²·r + N_vrr·v·r² + N_vvv·v³
 
 - **r** — yaw rate [rad/s]; **v** — sway (lateral body velocity) [m/s]
 - No standalone **r²** term (even powers are unphysical for rotational damping)
-- Without tank/CFD data, all six coefficients are **bootstrapped** from Hoerner hull cross-flow and reference kinematics `r_ref = V/R`, `V_ref` (EQ-HYD-020)
+- Without tank/CFD data, all six coefficients are **bootstrapped** from Hoerner hull cross-flow and reference kinematics `r_ref = V/R`, `V_ref` (EQ-HYD-020). With the linear + cubic pair, `N_rrr = −N_cross/(4·r_ref)` so `N_r·r + N_rrr·r³` matches `−N_cross·r²` at design.
 - Configure under `hydrodynamics.yaw_damping` in `configs/defaults.yaml`; any coefficient can be overridden when measurements exist
 - At design with default `lateral_speed_mps: 0`, sizing uses `N_r·r + N_rrr·r³`
 

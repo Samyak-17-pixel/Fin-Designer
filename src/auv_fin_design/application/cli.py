@@ -31,7 +31,11 @@ def main() -> None:
         return
 
     from auv_fin_design.adapters.export_bundle import export_simulation_bundle
-    from auv_fin_design.application.pipeline import load_golden_vehicle, run_design_pipeline
+    from auv_fin_design.application.pipeline import (
+        load_golden_servo,
+        load_golden_vehicle,
+        run_design_pipeline,
+    )
     from auv_fin_design.domain.constants.materials import get_material
     from auv_fin_design.domain.geometry.sizing import geometry_to_dict
     from auv_fin_design.domain.reporting.export import write_all_reports
@@ -46,6 +50,7 @@ def main() -> None:
         vehicle,
         mission,
         material=get_material(args.material),
+        servo=load_golden_servo(),
         airfoil_name=args.airfoil,
         defaults=defaults,
         run_sensitivity=not args.no_sensitivity,

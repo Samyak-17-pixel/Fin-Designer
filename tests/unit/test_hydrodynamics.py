@@ -40,7 +40,8 @@ def test_EQ_HYD_golden_added_mass_and_damping():
         rho, v.diameter, L, cd_cross=1.0
     )
     r_op = 1.5 / 6.0
-    assert abs(h.yaw_damping.N_rrr - (-n_cross / r_op)) / abs(n_cross / r_op) < 0.01
+    # Full poly: N_rrr = -N_cross/(4·r) so N_r·r + N_rrr·r³ matches −N_cross·r²
+    assert abs(h.yaw_damping.N_rrr - (-n_cross / (4.0 * r_op))) / abs(n_cross / r_op) < 0.01
     assert h.yaw_damping.N_r != 0.0
     assert h.yaw_damping.N_vvr != 0.0
     assert h.design_yaw_rate_rad_s == r_op
