@@ -7,7 +7,7 @@ import sys
 
 def main() -> None:
     try:
-        from auv_fin_design.ui.main_window import run_app
+        from auv_fin_design.ui.gui.main_window import run_app
     except ImportError as exc:
         print(
             "PySide6 is required for the GUI.\n"

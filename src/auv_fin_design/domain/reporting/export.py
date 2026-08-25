@@ -12,15 +12,18 @@ if TYPE_CHECKING:
     from auv_fin_design.application.pipeline import DesignResult
 
 
-def _payload(result: DesignResult) -> dict:
+def design_result_payload(result: DesignResult) -> dict:
+    """Complete serializable view of a design run — shared by GUI, JSON, and reports."""
     from auv_fin_design.domain.validation.design_diagnosis import diagnose_design
 
+    h = result.hydro
     sens = None
     if result.sensitivity is not None:
         sens = {
             "baseline_M_design_Nm": result.sensitivity.baseline_M_design_Nm,
             "baseline_span_m": result.sensitivity.baseline_span_m,
             "points": [p.model_dump() for p in result.sensitivity.points],
+            "equation_ids": list(result.sensitivity.equation_ids),
         }
     opt = None
     if result.optimization is not None:
@@ -30,6 +33,7 @@ def _payload(result: DesignResult) -> dict:
             "best_drag": result.optimization.best_drag,
             "best_mass": result.optimization.best_mass,
             "best_params": result.optimization.best_params,
+            "n_evaluations": result.optimization.n_evaluations,
         }
     return {
         "passed": result.passed,
@@ -41,23 +45,41 @@ def _payload(result: DesignResult) -> dict:
             "diameter_m": result.vehicle.diameter,
             "mass_kg": result.vehicle.mass,
             "water": result.vehicle.water,
+            "cg_fraction": result.vehicle.cg_fraction_of_length,
+            "cb_fraction": result.vehicle.cb_fraction_of_length,
+            "fin_root_le_fraction": result.vehicle.fin_root_le_fraction_of_length,
+            "n_fins": result.vehicle.n_fins,
+            "configuration": result.vehicle.configuration,
+            "fin_clocking_deg": list(result.vehicle.fin_clocking_deg),
             "design_speed_mps": result.mission.design_speed,
             "max_speed_mps": result.mission.max_speed,
             "turning_radius_m": result.mission.turning_radius,
             "turn_establishment_s": result.mission.turn_establishment_time,
         },
-        "control": {
-            "M_design_Nm": result.control_req.M_design,
-            "M_transient_Nm": result.control_req.M_transient,
-            "M_steady_Nm": result.control_req.M_steady,
-            "lift_per_fin_N": result.allocation.lift_per_fin,
-            "lever_arm_m": result.allocation.lever_arm,
-        },
+        "control_requirement": result.control_req.model_dump(),
+        "allocation": result.allocation.model_dump(),
         "hydrodynamics": {
-            "Re_L": result.hydro.re_length,
-            "dynamic_pressure_Pa": result.hydro.dynamic_pressure,
-            "hull_drag_N": result.hydro.drag_total_hull,
-            "flow_regime": result.hydro.flow_regime,
+            "speed_mps": h.speed,
+            "Re_L": h.re_length,
+            "Re_D": h.re_diameter,
+            "flow_regime": h.flow_regime,
+            "dynamic_pressure_Pa": h.dynamic_pressure,
+            "cf_ittc": h.cf_ittc,
+            "cd_frontal": h.cd_frontal,
+            "drag_friction_N": h.drag_friction,
+            "hull_drag_N": h.drag_total_hull,
+            "X_udot": h.X_udot,
+            "Y_vdot": h.Y_vdot,
+            "Z_wdot": h.Z_wdot,
+            "K_pdot": h.K_pdot,
+            "M_qdot": h.M_qdot,
+            "N_rdot": h.N_rdot,
+            "yaw_damping": h.yaw_damping.model_dump(),
+            "design_yaw_rate_rad_s": h.design_yaw_rate_rad_s,
+            "design_lateral_speed_mps": h.design_lateral_speed_mps,
+            "wake_fraction": h.wake_fraction,
+            "cd_cross": h.cd_cross,
+            "equation_ids": list(h.equation_ids),
         },
         "hydro_validation": result.hydro_validation.model_dump(),
         "geometry": geometry_to_dict(result.geometry),
@@ -65,27 +87,25 @@ def _payload(result: DesignResult) -> dict:
         "shaft_fit": result.shaft_fit.model_dump(),
         "aero": {
             "alpha_deg": result.aero.alpha_deg,
+            "alpha_rad": result.aero.alpha_rad,
             "CL": result.aero.cl,
+            "CL_alpha_2d": result.aero.cl_alpha_2d,
+            "CL_alpha_3d": result.aero.cl_alpha_3d,
+            "CL_max_2d": result.aero.cl_max_2d,
+            "CD_profile": result.aero.cd_profile,
+            "CD_induced": result.aero.cd_induced,
             "CD": result.aero.cd_total,
             "Cm": result.aero.cm,
             "stall_alpha_deg": result.aero.stall_alpha_deg,
+            "stalled": result.aero.stalled,
+            "equation_ids": list(result.aero.equation_ids),
         },
         "structure": {
-            "FoS_cruise": result.structure_cruise.fos_yield,
-            "FoS_aggressive": result.structure_aggressive.fos_yield,
-            "FoS_emergency": result.structure_emergency.fos_yield,
-            "shear_stress_Pa": result.structure_aggressive.shear_stress,
-            "tip_twist_deg": result.structure_aggressive.tip_twist_deg,
-            "von_mises_Pa": result.structure_aggressive.combined_von_mises,
+            "cruise": result.structure_cruise.model_dump(),
+            "aggressive": result.structure_aggressive.model_dump(),
+            "emergency": result.structure_emergency.model_dump(),
         },
-        "servo": {
-            "utilization": result.servo_result.utilization,
-            "hinge_moment_Nm": result.servo_result.hinge_moment,
-            "shaft_fos": result.servo_result.shaft_fos,
-            "bearing_load_N": result.servo_result.bearing_radial_load,
-            "actuation_time_s": result.servo_result.actuation_time_s,
-            "waterproofing": result.servo_result.waterproofing_note,
-        },
+        "servo": result.servo_result.model_dump(),
         "manufacturing": result.manufacturing.model_dump(),
         "sensitivity": sens,
         "optimization": opt,
@@ -94,6 +114,11 @@ def _payload(result: DesignResult) -> dict:
         "warnings": result.warnings,
         "equation_ids": result.equation_ids,
     }
+
+
+def _payload(result: DesignResult) -> dict:
+    """Alias for backward compatibility within this module."""
+    return design_result_payload(result)
 
 
 def write_json_report(result: DesignResult, path: Path) -> Path:

@@ -1,0 +1,340 @@
+/* Deep ocean engineering theme — PySide6 native UI */
+
+* {
+    font-family: "Segoe UI", "Inter", sans-serif;
+    color: #d0e4f5;
+}
+
+QMainWindow, QWidget {
+    background-color: #0a1628;
+}
+
+QMenuBar {
+    background-color: #0f1c2e;
+    border-bottom: 1px solid #2a4568;
+}
+
+QMenuBar::item:selected {
+    background-color: #1e3a5f;
+}
+
+QMenu {
+    background-color: #152238;
+    border: 1px solid #2a4568;
+}
+
+QMenu::item:selected {
+    background-color: #1e3a5f;
+}
+
+QGroupBox {
+    border: 1px solid #2a4568;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding-top: 8px;
+    font-weight: bold;
+    color: #00d4aa;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 6px;
+}
+
+QLineEdit, QDoubleSpinBox, QComboBox, QTextEdit, QSpinBox {
+    background-color: #152238;
+    border: 1px solid #2a4568;
+    border-radius: 4px;
+    padding: 6px 10px;
+    selection-background-color: #00d4aa;
+    selection-color: #0a1628;
+}
+
+QLineEdit#SearchBox {
+    border-color: #00a884;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+QLineEdit#SearchBox:focus {
+    border-color: #00d4aa;
+}
+
+QPushButton {
+    background-color: #1e3a5f;
+    border: 1px solid #2a4568;
+    border-radius: 6px;
+    padding: 8px 16px;
+    color: #d0e4f5;
+    font-weight: 600;
+}
+
+QPushButton:hover {
+    background-color: #2a5080;
+    border-color: #00d4aa;
+}
+
+QPushButton:pressed {
+    background-color: #00d4aa;
+    color: #0a1628;
+}
+
+QPushButton#PrimaryButton {
+    background-color: #00a884;
+    border-color: #00d4aa;
+    color: #0a1628;
+    min-width: 120px;
+}
+
+QPushButton#PrimaryButton:hover {
+    background-color: #00d4aa;
+}
+
+QPushButton#CorrectionButton {
+    text-align: left;
+    padding: 10px 14px;
+    background-color: #1a2a42;
+    border-left: 3px solid #ffb347;
+}
+
+QPushButton#ExportPathButton {
+    text-align: left;
+    font-family: "Consolas", monospace;
+    font-size: 12px;
+    padding: 10px;
+}
+
+QListWidget#SectionNav {
+    background-color: #0f1c2e;
+    border: 1px solid #2a4568;
+    border-radius: 6px;
+    outline: none;
+}
+
+QListWidget#SectionNav::item {
+    padding: 10px 12px;
+    border-bottom: 1px solid #1a2a42;
+}
+
+QListWidget#SectionNav::item:selected {
+    background-color: #1e3a5f;
+    color: #00d4aa;
+    border-left: 3px solid #00d4aa;
+}
+
+QListWidget#SectionNav::item:hover {
+    background-color: #152238;
+}
+
+QStackedWidget#ResultsStack {
+    border: 1px solid #2a4568;
+    border-radius: 6px;
+    background: #0f1c2e;
+}
+
+QTabWidget::pane {
+    border: 1px solid #2a4568;
+    border-radius: 6px;
+    background: #0f1c2e;
+}
+
+QTabBar::tab {
+    background: #152238;
+    border: 1px solid #2a4568;
+    padding: 8px 14px;
+    margin-right: 2px;
+}
+
+QTabBar::tab:selected {
+    background: #1e3a5f;
+    color: #00d4aa;
+}
+
+QTableWidget, QTreeWidget {
+    background-color: #152238;
+    alternate-background-color: #1a2a42;
+    gridline-color: #2a4568;
+    border: none;
+}
+
+QTreeWidget#DiagnosisTree {
+    border: 1px solid #2a4568;
+    border-radius: 6px;
+}
+
+QHeaderView::section {
+    background-color: #1e3a5f;
+    padding: 8px;
+    border: 1px solid #2a4568;
+    font-weight: bold;
+}
+
+QScrollBar:vertical {
+    background: #152238;
+    width: 10px;
+}
+
+QScrollBar::handle:vertical {
+    background: #2a4568;
+    border-radius: 4px;
+    min-height: 24px;
+}
+
+QProgressBar {
+    border: 1px solid #2a4568;
+    border-radius: 4px;
+    background: #152238;
+    height: 6px;
+}
+
+QProgressBar::chunk {
+    background: #00d4aa;
+    border-radius: 3px;
+}
+
+QProgressBar#MarginBarGood::chunk { background: #00d4aa; }
+QProgressBar#MarginBarWarn::chunk { background: #ffb347; }
+QProgressBar#MarginBarBad::chunk { background: #ff6b6b; }
+
+QFrame#MetricTile {
+    background-color: #152238;
+    border: 1px solid #2a4568;
+    border-radius: 8px;
+}
+
+QFrame#MetricTile:hover {
+    border-color: #00d4aa;
+}
+
+QFrame#MetricTile[status="good"] { border-left: 3px solid #00d4aa; }
+QFrame#MetricTile[status="warn"] { border-left: 3px solid #ffb347; }
+QFrame#MetricTile[status="bad"] { border-left: 3px solid #ff6b6b; }
+
+QLabel#MetricLabel { color: #7a9bb8; font-size: 11px; }
+
+QLabel#MetricValue {
+    color: #00d4aa;
+    font-size: 18px;
+    font-weight: bold;
+    font-family: "JetBrains Mono", "Consolas", monospace;
+}
+
+QLabel#StatusBanner {
+    font-size: 20px;
+    font-weight: bold;
+    padding: 14px;
+    border-radius: 8px;
+    background: #152238;
+}
+
+QLabel#StatusBanner[passed="true"] {
+    color: #00d4aa;
+    border: 2px solid #00d4aa;
+}
+
+QLabel#StatusBanner[passed="false"] {
+    color: #ff6b6b;
+    border: 2px solid #ff6b6b;
+}
+
+QLabel#StatusChip {
+    padding: 5px 12px;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+QLabel#StatusChip[ok="true"] {
+    background: #0d3d32;
+    color: #00d4aa;
+    border: 1px solid #00d4aa;
+}
+
+QLabel#StatusChip[ok="false"] {
+    background: #3d1a1a;
+    color: #ff6b6b;
+    border: 1px solid #ff6b6b;
+}
+
+QFrame#SectionCard {
+    background-color: #152238;
+    border: 1px solid #2a4568;
+    border-radius: 8px;
+    margin-top: 8px;
+}
+
+QLabel#SectionTitle {
+    color: #00d4aa;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QLabel#DimLine {
+    padding: 3px 0;
+    font-family: "JetBrains Mono", "Consolas", monospace;
+    font-size: 12px;
+}
+
+QLabel#BuildSheet {
+    background: #0f1c2e;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #2a4568;
+    line-height: 1.5;
+}
+
+QLabel#StatusLine { color: #7a9bb8; padding: 4px; }
+
+QLabel#InputHint {
+    color: #7a9bb8;
+    padding: 8px;
+    background: #152238;
+    border-radius: 6px;
+    border: 1px solid #2a4568;
+}
+
+QLabel#InputHintError {
+    color: #ff6b6b;
+    padding: 8px;
+    background: #2a1515;
+    border-radius: 6px;
+    border: 1px solid #ff6b6b;
+}
+
+QFrame#StepIndicator {
+    background: #0f1c2e;
+    border: 1px solid #2a4568;
+    border-radius: 6px;
+}
+
+QLabel#StepLabel {
+    color: #4a6080;
+    font-size: 11px;
+    padding: 4px;
+}
+
+QLabel#StepLabel[active="true"] {
+    color: #00d4aa;
+    font-weight: bold;
+}
+
+QLabel#StepLabel[done="true"] {
+    color: #7a9bb8;
+}
+
+QLabel#StepArrow {
+    color: #2a4568;
+    font-size: 10px;
+}
+
+QSplitter::handle {
+    background: #2a4568;
+    width: 4px;
+}
+
+QStatusBar {
+    background: #0f1c2e;
+    color: #7a9bb8;
+    border-top: 1px solid #2a4568;
+}

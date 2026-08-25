@@ -153,6 +153,7 @@ def run_design_pipeline(
         mission,
         crossflow_cd=float(cfg["hydrodynamics"]["crossflow_cd"]),
         axial_added_mass_factor=float(cfg["hydrodynamics"]["axial_added_mass_factor"]),
+        yaw_damping_cfg=cfg["hydrodynamics"].get("yaw_damping"),
     )
     control_req = compute_control_requirement(
         vehicle,

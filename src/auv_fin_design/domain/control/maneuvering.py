@@ -7,6 +7,7 @@ import math
 from pydantic import BaseModel, ConfigDict, Field
 
 from auv_fin_design.domain.hydrodynamics.estimator import HydrodynamicModel
+from auv_fin_design.domain.hydrodynamics.yaw_damping import yaw_hydrodynamic_moment
 from auv_fin_design.domain.vehicle.model import MissionModel, VehicleModel
 
 
@@ -46,12 +47,13 @@ def compute_control_requirement(
     m_i = vehicle.Iz * r_dot  # EQ-MAN-003
     m_a = hydro.N_rdot * r_dot  # EQ-MAN-004
 
-    def damping(r: float) -> float:
-        # EQ-MAN-005 — signed moment opposing yaw (N coeffs are negative)
-        return hydro.N_r * r + hydro.N_r_abs_r * abs(r) * r
+    def damping(v_sway: float, r: float) -> float:
+        # EQ-MAN-005 — full Fossen polynomial (sway v + yaw r)
+        return yaw_hydrodynamic_moment(v_sway, r, hydro.yaw_damping)
 
-    m_d_trans = damping(r_target)
-    m_d_steady = damping(r_target)
+    v_design = hydro.design_lateral_speed_mps
+    m_d_trans = damping(v_design, r_target)
+    m_d_steady = damping(v_design, r_target)
 
     # Required control moment counters inertia+added+damping.
     # With negative damping coeffs, damping() is negative for r>0; fins must overcome
@@ -59,7 +61,8 @@ def compute_control_requirement(
     # M_control + M_damping = M_I + M_A  during transient? 
     # SRDS: M_req = M_I + M_A + M_D where M_D is hydrodynamic resistance magnitude.
     # Damping coefficients are negative (resistive). The resistive moment magnitude is -M_D
-    # when M_D = N_r*r + N_|r|r*|r|*r < 0.
+    # Damping coefficients are negative (resistive). The resistive moment magnitude is -M_D
+    # when M_D = N(v,r) polynomial < 0.
     m_damp_trans_resist = -m_d_trans  # positive resistance
     m_damp_steady_resist = -m_d_steady
 
