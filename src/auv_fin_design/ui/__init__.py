@@ -1,5 +1,5 @@
-"""GUI package."""
+"""GUI package.
 
-from auv_fin_design.ui.main_window import run_app
-
-__all__ = ["run_app"]
+Heavy PySide6 imports live in ``ui.app`` and ``ui.gui`` submodules so unit tests
+can import headless view models on CI without display libraries.
+"""
